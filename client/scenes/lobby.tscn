@@ -1,0 +1,110 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/lobby_screen.gd" id="1"]
+
+[node name="Lobby" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.109804, 0.125490, 0.160784, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(520, 0)
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Column" type="VBoxContainer" parent="Center/Panel/Margin"]
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Column"]
+text = "REDLINE COMMANDER"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="Center/Panel/Margin/Column"]
+text = "Not connected"
+horizontal_alignment = 1
+
+[node name="ServerRow" type="HBoxContainer" parent="Center/Panel/Margin/Column"]
+theme_override_constants/separation = 8
+
+[node name="ServerLabel" type="Label" parent="Center/Panel/Margin/Column/ServerRow"]
+text = "Server"
+
+[node name="ServerUrl" type="LineEdit" parent="Center/Panel/Margin/Column/ServerRow"]
+custom_minimum_size = Vector2(0, 44)
+size_flags_horizontal = 3
+placeholder_text = "ws://host:2567/play"
+
+[node name="Connect" type="Button" parent="Center/Panel/Margin/Column/ServerRow"]
+custom_minimum_size = Vector2(110, 44)
+text = "Connect"
+
+[node name="FactionRow" type="HBoxContainer" parent="Center/Panel/Margin/Column"]
+theme_override_constants/separation = 8
+
+[node name="FactionLabel" type="Label" parent="Center/Panel/Margin/Column/FactionRow"]
+custom_minimum_size = Vector2(70, 0)
+text = "Faction"
+
+[node name="Faction" type="OptionButton" parent="Center/Panel/Margin/Column/FactionRow"]
+custom_minimum_size = Vector2(0, 44)
+size_flags_horizontal = 3
+
+[node name="MapRow" type="HBoxContainer" parent="Center/Panel/Margin/Column"]
+theme_override_constants/separation = 8
+
+[node name="MapLabel" type="Label" parent="Center/Panel/Margin/Column/MapRow"]
+custom_minimum_size = Vector2(70, 0)
+text = "Map"
+
+[node name="Map" type="OptionButton" parent="Center/Panel/Margin/Column/MapRow"]
+custom_minimum_size = Vector2(0, 44)
+size_flags_horizontal = 3
+
+[node name="Create" type="Button" parent="Center/Panel/Margin/Column"]
+custom_minimum_size = Vector2(0, 52)
+text = "Create match"
+
+[node name="Divider" type="HSeparator" parent="Center/Panel/Margin/Column"]
+
+[node name="JoinRow" type="HBoxContainer" parent="Center/Panel/Margin/Column"]
+theme_override_constants/separation = 8
+
+[node name="Code" type="LineEdit" parent="Center/Panel/Margin/Column/JoinRow"]
+custom_minimum_size = Vector2(0, 48)
+size_flags_horizontal = 3
+placeholder_text = "Match code"
+
+[node name="Join" type="Button" parent="Center/Panel/Margin/Column/JoinRow"]
+custom_minimum_size = Vector2(140, 48)
+text = "Join match"
+
+[node name="Rejoin" type="Button" parent="Center/Panel/Margin/Column"]
+custom_minimum_size = Vector2(0, 48)
+text = "Rejoin match"
+
+[node name="Message" type="Label" parent="Center/Panel/Margin/Column"]
+custom_minimum_size = Vector2(0, 44)
+autowrap_mode = 2
+horizontal_alignment = 1

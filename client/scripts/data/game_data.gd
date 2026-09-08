@@ -60,6 +60,14 @@ func base_damage(attacker_type: String, defender_type: String) -> int:
 	return int(damage_matrix.get(attacker_type, {}).get(defender_type, 0))
 
 
+## The maps the lobby may offer, from maps/index.json. Read from an index
+## rather than by scanning the directory: res:// cannot be reliably listed
+## from an exported PCK, so a scan works in the editor and finds nothing on
+## a real device.
+func map_list() -> Array:
+	return _load_json("maps/index.json").get("maps", [])
+
+
 func load_map(map_id: String) -> Dictionary:
 	if not _maps.has(map_id):
 		_maps[map_id] = _load_json("maps/%s.json" % map_id)

@@ -29,7 +29,7 @@ redline-commander/
 ├── client/                     # Godot project
 │   ├── project.godot
 │   ├── data/                   # GENERATED copy of shared/data - do not edit
-│   ├── scenes/                 # match.tscn (the playable screen), board, action bar
+│   ├── scenes/                 # main (router), lobby, match, board, action bar
 │   ├── tests/                  # Checks + a PNG preview renderer
 │   └── scripts/
 │       ├── data/game_data.gd         # autoload: the shared tables
@@ -44,6 +44,9 @@ redline-commander/
 │       ├── board/fog_overlay.gd      # dims tiles outside vision
 │       ├── board/tile_overlay.gd     # movement/attack/selection highlights
 │       ├── board/board_camera.gd     # pan and zoom (camera gestures only)
+│       ├── net/session_store.gd       # autoload: last match, for rejoining
+│       ├── app.gd                     # owns the connection, swaps screens
+│       ├── ui/lobby_screen.gd         # connect, create, join by code, rejoin
 │       ├── ui/action_bar.gd          # Capture / Wait / Cancel / End Turn
 │       ├── match_controller.gd       # what a tap means: select, move, attack
 │       └── turn_controller.gd        # sends one action, waits, adopts result
@@ -77,10 +80,18 @@ cd client
 godot --headless res://tests/boot_check.tscn    # 33 checks: autoloads, data, rules
 godot --headless res://tests/board_check.tscn   # 28 checks: the board renderer
 godot --headless res://tests/input_check.tscn   # 34 checks: what a tap does
+godot --headless res://tests/lobby_check.tscn   # 26 checks: lobby and routing
 
 # These need a real renderer, so use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
+```
+
+**End to end**, from the repo root — builds the server, hosts a match, and
+runs the real client against it:
+
+```bash
+tools/live-check.sh
 ```
 
 The boot check proves the autoloads come up, the data tables parsed, and the
@@ -106,10 +117,13 @@ records what the first scaffold got wrong and why it changed.
 
 ## Status
 
-The loop works: select a unit, see its range, move, attack, capture, end turn
-— validated by the server at every step. Missing before it is a game:
-animation of server events, a full HUD, a lobby to start a match from, and
-art. See `docs/ROADMAP.md`.
+Playable end to end. Start the server, open the app, create a match, share
+the code, and your friend joins from theirs — then move, attack and capture
+with the server validating every step and fog of war enforced per player.
+`tools/live-check.sh` proves that whole path in one command.
+
+Missing before it is a game: animation of server events, a full HUD, a build
+menu, and art. See `docs/ROADMAP.md`.
 
 **Do not expose the server publicly yet.** Client tokens are not verified, so
 a client can currently claim any player id (`TODO(auth)` in

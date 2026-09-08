@@ -91,6 +91,10 @@ back. It contains no game rules at all.
   with reconnect backoff and automatic `rejoinMatch`
 - `scripts/state/match_state.gd` — local mirror, replaced wholesale from
   server views, never mutated optimistically
+- `scripts/net/session_store.gd` *(autoload `Session`)* — remembers the last
+  match id so the app can offer to rejoin after being closed
+- `scripts/app.gd` — application root: owns the connection and swaps screens
+- `scripts/ui/lobby_screen.gd` — connect, create, join by code, rejoin
 - `scripts/rules/movement_preview.gd` — **non-authoritative** range preview
 - `scripts/turn_controller.gd` — sends one action, waits, adopts the result
 - `scenes/board.tscn` + `scripts/board/` — the board renderer
@@ -120,6 +124,15 @@ tiles rather than synthesising touch events; the thin layer in front of it
 selected — and re-validates it against every server view rather than trusting
 it. A unit that died, moved, or was spent while the player was deciding
 cannot leave a stale selection behind.
+
+`App` is the only place that swaps screens, and the lobby and the board know
+nothing about each other. The lobby is a view that emits intents
+(`create_requested`, `join_requested`, …) and never touches `Net` itself,
+which is what lets its rules be tested by pressing buttons with no socket
+anywhere. A match starts only when a view arrives in `active` phase — a
+created match sits in `lobby` phase until the second player joins — and the
+view that triggers the swap is handed to the board explicitly, because it
+arrives before the board's own `TurnController` exists to receive it.
 
 ## Message flow
 

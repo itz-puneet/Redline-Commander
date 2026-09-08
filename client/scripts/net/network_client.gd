@@ -38,6 +38,12 @@ func _ready() -> void:
 	set_process(true)
 
 
+## True once the socket is open. The lobby uses this to decide whether its
+## buttons should do anything.
+func is_connected_to_server() -> bool:
+	return _socket.get_ready_state() == WebSocketPeer.STATE_OPEN
+
+
 func connect_to_server(url: String = "") -> void:
 	if not url.is_empty():
 		server_url = url

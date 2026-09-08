@@ -67,10 +67,12 @@ layout of the code, so keep them that way.
 
 ## Current status
 
-Rules engine, network layer, board rendering and touch input all work and are
-tested. A player can select a unit, see its range, move, attack, capture, and
-end their turn. Still missing before it is a game: animation of server events,
-a real HUD, a lobby, and art. See `docs/ROADMAP.md`.
+Playable end to end: connect, create or join a match by code, and fight it
+out - board, fog, touch input and server validation all working, verified
+against a real server by `tools/live-check.sh`. Still missing before it is a
+game: animation of server events, a full HUD, a build menu, and art. Token
+verification is still outstanding and blocks any public deployment. See
+`docs/ROADMAP.md`.
 
 ## Where to start
 
@@ -93,10 +95,15 @@ cd client
 godot --headless res://tests/boot_check.tscn    # autoloads, data tables, rules
 godot --headless res://tests/board_check.tscn   # the board renderer
 godot --headless res://tests/input_check.tscn   # what a tap on a tile does
+godot --headless res://tests/lobby_check.tscn   # the lobby and screen routing
 
 # These need a real renderer - use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
+xvfb-run -a godot --resolution 1280x720 res://tests/lobby_preview.tscn
+
+# End to end against a real server: builds, hosts a match, runs the client.
+tools/live-check.sh
 ```
 
 Two Godot gotchas worth knowing:

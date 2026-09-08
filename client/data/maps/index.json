@@ -1,0 +1,12 @@
+{
+  "_comment": "The maps the lobby offers. An index file rather than a directory scan because Godot cannot reliably list res:// contents from an exported PCK - anything not listed here would be invisible in a real Android build.",
+  "maps": [
+    {
+      "id": "crossing",
+      "display_name": "Redline Crossing",
+      "max_players": 2,
+      "size": "15x10",
+      "summary": "Symmetric land map. A river with three crossings and four neutral cities in the midfield."
+    }
+  ]
+}

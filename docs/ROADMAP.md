@@ -48,7 +48,8 @@ protocol.
 - [ ] Animate the `events` from `action_confirmed` instead of snapping
 - [ ] Full HUD: funds, turn banner, unit info panel, damage forecast
 - [ ] Build menu when tapping an owned factory/airport/port
-- [ ] Lobby screen: create match, share code, join by code
+- [x] Lobby screen: connect, create match, share code, join by code, rejoin
+- [x] End-to-end check against a real server (`tools/live-check.sh`)
 - [ ] Hotseat mode on one device (useful for testing without two phones)
 - [ ] Transport load/unload actions (data and state exist; engine does not)
 - [ ] Faction Field Directives (in `factions.json`; not wired into the engine)
