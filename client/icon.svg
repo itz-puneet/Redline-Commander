@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Placeholder app icon for Redline Commander. Original artwork: a red
+       command slash over a dark field. Replace in Phase 4. -->
+  <rect width="128" height="128" rx="24" fill="#1c2029"/>
+  <path d="M30 92 L64 26 L98 92 Z" fill="none" stroke="#d9443f" stroke-width="9" stroke-linejoin="round"/>
+  <rect x="44" y="74" width="40" height="9" rx="4" fill="#d9443f"/>
+</svg>

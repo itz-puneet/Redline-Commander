@@ -29,14 +29,21 @@ redline-commander/
 ├── client/                     # Godot project
 │   ├── project.godot
 │   ├── data/                   # GENERATED copy of shared/data - do not edit
-│   ├── tests/boot_check.tscn   # Headless client check (autoloads, data, rules)
+│   ├── scenes/board.tscn       # The board: terrain, fog, overlays, units, camera
+│   ├── tests/                  # Headless checks + a PNG preview renderer
 │   └── scripts/
 │       ├── data/game_data.gd         # autoload: the shared tables
 │       ├── net/player_identity.gd    # autoload: stable per-install player id
 │       ├── net/network_client.gd     # autoload: WebSocket + JSON, auto-reconnect
 │       ├── state/match_state.gd      # local mirror of the server's view
-│       ├── state/unit.gd             # one unit's presentation
 │       ├── rules/movement_preview.gd # NON-authoritative range preview
+│       ├── board/board.gd            # renders a MatchState; render(state)
+│       ├── board/board_theme.gd      # placeholder colours and labels
+│       ├── board/terrain_tileset.gd  # builds the TileSet from terrain data
+│       ├── board/unit.gd             # one unit's presentation
+│       ├── board/fog_overlay.gd      # dims tiles outside vision
+│       ├── board/tile_overlay.gd     # movement/attack/selection highlights
+│       ├── board/board_camera.gd     # pan and zoom (camera gestures only)
 │       └── turn_controller.gd        # sends one action, waits, adopts result
 └── server/
     ├── src/
@@ -65,7 +72,11 @@ project. Point `Net.server_url` at your server.
 
 ```bash
 cd client
-godot --headless res://tests/boot_check.tscn   # 33 checks, no display needed
+godot --headless res://tests/boot_check.tscn    # 33 checks: autoloads, data, rules
+godot --headless res://tests/board_check.tscn   # 26 checks: the board renderer
+
+# See it. Needs a real renderer, so use xvfb on a headless machine.
+xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
 ```
 
 The boot check proves the autoloads come up, the data tables parsed, and the

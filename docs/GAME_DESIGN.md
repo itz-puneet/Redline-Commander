@@ -98,7 +98,9 @@ build your way back.)
 `shared/data/maps/*.json`, as ASCII grids with a legend, a per-tile ownership
 grid and starting units. `crossing` ships as a 15×10 symmetric two-player
 land map: each side starts with an HQ, two cities, a factory, an airport, two
-infantry and a light tank, separated by a river with three crossings.
+infantry and a light tank. A river splits the map with three crossings — the
+north edge, a central road bridge, and the south edge — and four neutral
+cities sit in the midfield to be contested.
 
 ## Campaign (v1 scope)
 

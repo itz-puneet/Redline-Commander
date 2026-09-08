@@ -39,8 +39,10 @@ protocol.
 
 ## Phase 3 — Make it playable (next up)
 - [x] Project imports cleanly in Godot 4.3 and all scripts compile
-- [ ] Board scene: TileMapLayer for terrain, unit sprites, camera pan/zoom
-- [ ] Touch input: tap to select, movement overlay, tap to confirm
+- [x] Board scene: terrain tilemap, building ownership, units, fog, camera pan/zoom
+- [x] Movement/attack/selection overlays, driven by `MovementPreview`
+- [x] Headless board checks + a PNG preview renderer
+- [ ] Touch input: tap to select, tap to confirm a move (camera gestures done)
 - [ ] Wire `TurnController` signals to the board and animate `events`
 - [ ] HUD: funds, turn indicator, unit info panel, End Turn
 - [ ] Lobby screen: create match, share code, join by code

@@ -1,0 +1,22 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/board/board.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/board/fog_overlay.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/board/tile_overlay.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/board/board_camera.gd" id="4"]
+
+[node name="Board" type="Node2D"]
+script = ExtResource("1")
+
+[node name="TerrainLayer" type="TileMapLayer" parent="."]
+
+[node name="FogLayer" type="Node2D" parent="."]
+script = ExtResource("2")
+
+[node name="OverlayLayer" type="Node2D" parent="."]
+script = ExtResource("3")
+
+[node name="UnitLayer" type="Node2D" parent="."]
+
+[node name="BoardCamera" type="Camera2D" parent="."]
+script = ExtResource("4")

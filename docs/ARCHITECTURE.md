@@ -91,12 +91,25 @@ back. It contains no game rules at all.
   with reconnect backoff and automatic `rejoinMatch`
 - `scripts/state/match_state.gd` — local mirror, replaced wholesale from
   server views, never mutated optimistically
-- `scripts/state/unit.gd` — one unit's presentation, bound to a state entry
 - `scripts/rules/movement_preview.gd` — **non-authoritative** range preview
 - `scripts/turn_controller.gd` — sends one action, waits, adopts the result
+- `scenes/board.tscn` + `scripts/board/` — the board renderer
 
-Rendering, tilemap, input and UI are not built yet — they hang off
-`TurnController`'s signals. See `docs/ROADMAP.md` Phase 1.
+The board has a single entry point, `Board.render(state)`, and derives
+everything it draws from the `MatchState` the server sent. It holds no game
+state and makes no rules decisions, so the same scene is driven identically
+by a live match, a replay, or a test fixture. Draw order is terrain, fog,
+range overlays, units — fog sits under the overlays because a player may
+move into ground they have not scouted, so the movement range has to stay
+readable through it.
+
+Placeholder colours stand in for art (`board_theme.gd`), and the terrain
+TileSet is generated at runtime from `terrain.json` rather than authored, so
+the repo carries no placeholder art and a new terrain type appears on the
+board without touching a `.tres`.
+
+Touch input for selecting and ordering units is not wired yet — only camera
+gestures. See `docs/ROADMAP.md` Phase 3.
 
 ## Message flow
 

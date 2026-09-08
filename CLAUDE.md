@@ -88,7 +88,9 @@ npm run smoke        # end-to-end protocol check (server must be running)
 npm run verify:data  # fail if client/data has drifted from shared/data
 
 cd client
-godot --headless res://tests/boot_check.tscn   # client checks, no display needed
+godot --headless res://tests/boot_check.tscn    # autoloads, data tables, rules
+godot --headless res://tests/board_check.tscn   # the board renderer
+xvfb-run -a godot res://tests/board_preview.tscn  # render a PNG to look at
 ```
 
 `godot --check-only --script <file>` reports false "Identifier not found"
