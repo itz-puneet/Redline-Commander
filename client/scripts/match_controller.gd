@@ -14,11 +14,12 @@ extends Node
 ## tested by feeding tiles instead of synthesising touch events.
 ##
 ## The gesture vocabulary:
-##   tap your unit          select it, show move range and attackable enemies
-##   tap a highlighted tile move there
-##   tap a highlighted enemy attack it
-##   tap the selected unit  deselect
-##   Capture / Wait         bar buttons, for actions with no target tile
+##   tap your unit             select it, show move range and attackable enemies
+##   tap a highlighted tile    move there
+##   tap a highlighted enemy   attack it
+##   tap the selected unit     deselect
+##   tap your empty factory    open the build menu
+##   Capture / Wait            bar buttons, for actions with no target tile
 
 signal selection_changed(unit_id: String)
 signal action_refused(reason: String)
@@ -28,11 +29,12 @@ signal animating_changed(animating: bool)
 @export var board_path: NodePath = NodePath("../Board")
 @export var turn_controller_path: NodePath = NodePath("../TurnController")
 @export var action_bar_path: NodePath = NodePath("../UI/ActionBar")
+@export var build_menu_path: NodePath = NodePath("../UI/BuildMenu")
 
 var _board: Board = null
 var _turns: TurnController = null
 var _bar: Node = null
-
+var _build_menu: Node = null
 var _animator: EventAnimator = null
 
 var _selected_id: String = ""
@@ -45,6 +47,7 @@ func _ready() -> void:
 	_board = get_node_or_null(board_path) as Board
 	_turns = get_node_or_null(turn_controller_path) as TurnController
 	_bar = get_node_or_null(action_bar_path)
+	_build_menu = get_node_or_null(build_menu_path)
 
 	if _board == null or _turns == null:
 		push_error("MatchController: board or turn controller not found")
@@ -70,6 +73,9 @@ func _ready() -> void:
 		_bar.wait_pressed.connect(_on_wait_pressed)
 		_bar.cancel_pressed.connect(clear_selection)
 		_bar.end_turn_pressed.connect(_on_end_turn_pressed)
+
+	if _build_menu != null:
+		_build_menu.unit_chosen.connect(_on_build_chosen)
 
 
 func state() -> MatchState:
@@ -103,6 +109,12 @@ func refresh() -> void:
 		return
 
 	_board.render(current)
+
+	# The tile may have been built on, lost, or the turn may have passed
+	# while the menu was open, so re-check rather than trusting it.
+	if build_menu_is_open() and not can_build_at(_build_menu.tile()):
+		_build_menu.close()
+
 	if not _selected_id.is_empty() and not _can_command(_selected_id):
 		_set_selection("")
 	else:
@@ -120,11 +132,20 @@ func tap_tile(tile: Vector2i) -> void:
 	if current == null or _animating or not _turns.can_act():
 		return
 
+	# A tap on the board while the menu is up dismisses it, and does nothing
+	# else - otherwise choosing a tile and cancelling a menu are the same
+	# gesture with different outcomes depending on what is open.
+	if _build_menu != null and _build_menu.is_open():
+		_build_menu.close()
+		return
+
 	var tapped: Dictionary = current.unit_at(tile.x, tile.y)
 
 	if _selected_id.is_empty():
 		if not tapped.is_empty() and _can_command(String(tapped.get("id", ""))):
 			_set_selection(String(tapped["id"]))
+		elif tapped.is_empty() and can_build_at(tile):
+			_open_build_menu(tile)
 		return
 
 	# An enemy under the attack overlay is a target, and takes priority: a
@@ -155,6 +176,52 @@ func tap_tile(tile: Vector2i) -> void:
 
 func clear_selection() -> void:
 	_set_selection("")
+
+
+## --- production --------------------------------------------------------
+
+## Whether the local player could start a build on this tile right now.
+## Mirrors what doBuild() in the server engine checks before the funds test -
+## affordability is left to the menu, so the player can see what they are
+## saving for rather than being shown an empty list.
+func can_build_at(tile: Vector2i) -> bool:
+	var current := state()
+	if current == null or not current.is_my_turn():
+		return false
+	if not bool(GameData.terrain_stats(current.terrain_at(tile.x, tile.y)).get("builds", false)):
+		return false
+	if current.tile_owner_at(tile.x, tile.y) != current.you_slot:
+		return false
+	return current.unit_at(tile.x, tile.y).is_empty()
+
+
+func build_menu_is_open() -> bool:
+	return _build_menu != null and _build_menu.is_open()
+
+
+func _open_build_menu(tile: Vector2i) -> void:
+	if _build_menu == null:
+		return
+	var current := state()
+	_set_selection("")
+	_build_menu.open_for(current.terrain_at(tile.x, tile.y), tile, current.my_funds(),
+		_my_faction())
+
+
+func _on_build_chosen(unit_type: String) -> void:
+	if not _turns.can_act() or _animating:
+		return
+	_turns.build(unit_type, _build_menu.tile())
+
+
+func _my_faction() -> String:
+	var current := state()
+	if current == null:
+		return ""
+	for player in current.players:
+		if int(player.get("slot", 0)) == current.you_slot:
+			return String(player.get("faction", ""))
+	return ""
 
 
 ## --- bar actions -------------------------------------------------------

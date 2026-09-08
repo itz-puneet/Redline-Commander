@@ -49,6 +49,7 @@ redline-commander/
 │       ├── app.gd                     # owns the connection, swaps screens
 │       ├── ui/lobby_screen.gd         # connect, create, join by code, rejoin
 │       ├── ui/action_bar.gd          # Capture / Wait / Cancel / End Turn
+│       ├── ui/build_menu.gd          # what a production tile can make
 │       ├── match_controller.gd       # what a tap means: select, move, attack
 │       └── turn_controller.gd        # sends one action, waits, adopts result
 └── server/
@@ -83,6 +84,7 @@ godot --headless res://tests/board_check.tscn   # 28 checks: the board renderer
 godot --headless res://tests/input_check.tscn   # 34 checks: what a tap does
 godot --headless res://tests/lobby_check.tscn   # 26 checks: lobby and routing
 godot --headless res://tests/animation_check.tscn  # 24 checks: event animation
+godot --headless res://tests/build_check.tscn   # 43 checks: costs and production
 
 # These need a real renderer, so use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
@@ -125,10 +127,10 @@ with the server validating every step and fog of war enforced per player.
 `tools/live-check.sh` proves that whole path in one command.
 
 Moves walk their path, attacks lunge and pop damage numbers, kills fade out
-and captures flash.
+and captures flash. Income accumulates and can be spent: tap one of your
+factories, airports or ports to build.
 
-Missing before it is a game: a full HUD, a build menu, and art. See
-`docs/ROADMAP.md`.
+Missing before it is a game: a full HUD and art. See `docs/ROADMAP.md`.
 
 **Do not expose the server publicly yet.** Client tokens are not verified, so
 a client can currently claim any player id (`TODO(auth)` in

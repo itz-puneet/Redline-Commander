@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/board.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/action_bar.tscn" id="2"]
 [ext_resource type="Script" path="res://scripts/turn_controller.gd" id="3"]
 [ext_resource type="Script" path="res://scripts/match_controller.gd" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/build_menu.tscn" id="5"]
 
 [node name="Match" type="Node"]
 
@@ -16,8 +17,11 @@ script = ExtResource("3")
 
 [node name="ActionBar" parent="UI" instance=ExtResource("2")]
 
+[node name="BuildMenu" parent="UI" instance=ExtResource("5")]
+
 [node name="MatchController" type="Node" parent="."]
 script = ExtResource("4")
 board_path = NodePath("../Board")
 turn_controller_path = NodePath("../TurnController")
 action_bar_path = NodePath("../UI/ActionBar")
+build_menu_path = NodePath("../UI/BuildMenu")

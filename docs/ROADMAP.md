@@ -46,8 +46,8 @@ protocol.
 - [x] `scenes/match.tscn` - the playable screen, wired through `TurnController`
 - [x] Minimal action bar (Capture / Wait / Cancel / End Turn)
 - [x] Animate the `events` from `action_confirmed` instead of snapping
-- [ ] Full HUD: funds, turn banner, unit info panel, damage forecast
-- [ ] Build menu when tapping an owned factory/airport/port
+- [ ] Full HUD: turn banner, unit info panel, damage forecast
+- [x] Build menu when tapping an owned factory/airport/port
 - [x] Lobby screen: connect, create match, share code, join by code, rejoin
 - [x] End-to-end check against a real server (`tools/live-check.sh`)
 - [ ] Hotseat mode on one device (useful for testing without two phones)

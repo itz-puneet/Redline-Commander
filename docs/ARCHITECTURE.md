@@ -125,6 +125,16 @@ selected — and re-validates it against every server view rather than trusting
 it. A unit that died, moved, or was spent while the player was deciding
 cannot leave a stale selection behind.
 
+Production goes through the same one-action-at-a-time path as everything
+else: tapping an owned, empty production tile opens a menu of what it can
+build, and choosing one submits a `build`. The menu shows options the player
+cannot yet afford, greyed out, so they can see what they are saving toward.
+Prices come from `GameData.build_cost()`, which mirrors `buildCost()` in the
+server engine — unlike a movement preview this has to agree *exactly*, since
+a price shown and then charged differently is a bug the player notices
+immediately, so both sides read the same modifiers out of `factions.json` and
+both test suites assert the same figures.
+
 Server events are animated before the new state is drawn. The ordering is
 the whole trick: `TurnController` adopts the incoming view immediately, but
 `MatchController` holds off rendering until `EventAnimator` has played the

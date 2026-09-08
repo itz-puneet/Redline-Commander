@@ -70,7 +70,7 @@ layout of the code, so keep them that way.
 Playable end to end: connect, create or join a match by code, and fight it
 out - board, fog, touch input, animated moves and combat, all validated by
 the server and verified against a real one by `tools/live-check.sh`. Still
-missing before it is a game: a full HUD, a build menu, and art. Token
+missing before it is a game: a full HUD and art. Token
 verification is still outstanding and blocks any public deployment. See
 `docs/ROADMAP.md`.
 
@@ -97,12 +97,14 @@ godot --headless res://tests/board_check.tscn   # the board renderer
 godot --headless res://tests/input_check.tscn   # what a tap on a tile does
 godot --headless res://tests/lobby_check.tscn   # the lobby and screen routing
 godot --headless res://tests/animation_check.tscn  # event animation
+godot --headless res://tests/build_check.tscn   # production costs and the build menu
 
 # These need a real renderer - use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/lobby_preview.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/animation_preview.tscn
+xvfb-run -a godot --resolution 1280x720 res://tests/build_preview.tscn
 
 # End to end against a real server: builds, hosts a match, runs the client.
 tools/live-check.sh
@@ -119,3 +121,10 @@ Two Godot gotchas worth knowing:
   input, so `Input.parse_input_event` and `Viewport.push_input` go nowhere
   and input tests would pass vacuously. That is why `gesture_check` needs
   xvfb, and why it fails loudly if nothing was delivered.
+- A GDScript function containing `await` is a coroutine, and calling it
+  *without* `await` returns immediately at its first suspension. In a test
+  suite that means `_ready()` races ahead to the summary and prints "all
+  checks passed" for checks that never ran. Await every phase, and give a
+  suite whose phases can suspend a completion sentinel (see the `_phases`
+  counter in `build_check`). A suite that reports success while its scene
+  failed to load is worse than one that fails.

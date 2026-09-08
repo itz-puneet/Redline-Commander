@@ -60,6 +60,33 @@ func base_damage(attacker_type: String, defender_type: String) -> int:
 	return int(damage_matrix.get(attacker_type, {}).get(defender_type, 0))
 
 
+## What a unit costs this faction, faction modifiers included.
+##
+## Mirrors buildCost() in server/src/game/engine.ts. Unlike a movement-range
+## preview, this one has to agree exactly rather than approximately - a price
+## the player is shown and then charged differently is a bug they will notice
+## immediately. Both sides read the same modifiers out of factions.json, and
+## build_check asserts the same figures the server's engine tests do.
+func build_cost(unit_type: String, faction_id: String) -> int:
+	var stats := unit_stats(unit_type)
+	if stats.is_empty():
+		return 0
+
+	var modifiers: Dictionary = factions.get(faction_id, {}).get("modifiers", {})
+	var per_unit := float(modifiers.get("cost_pct", {}).get(unit_type, 0))
+	var global := float(modifiers.get("global_cost_pct", 0))
+	return roundi(float(stats.get("cost", 0)) * (1.0 + (per_unit + global) / 100.0))
+
+
+## Unit types this terrain can produce, in data-table order.
+func buildable_at(terrain_id: String) -> Array[String]:
+	var out: Array[String] = []
+	for unit_type in units.keys():
+		if unit_stats(String(unit_type)).get("built_at", []).has(terrain_id):
+			out.append(String(unit_type))
+	return out
+
+
 ## The maps the lobby may offer, from maps/index.json. Read from an index
 ## rather than by scanning the directory: res:// cannot be reliably listed
 ## from an exported PCK, so a scan works in the editor and finds nothing on
