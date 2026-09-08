@@ -72,7 +72,7 @@ func _submit(action: Dictionary) -> void:
 
 
 func _on_update_received(events: Array, view: Dictionary) -> void:
-	_adopt(view)
+	adopt_view(view)
 	_clear_in_flight()
 	action_confirmed.emit(events)
 
@@ -80,17 +80,27 @@ func _on_update_received(events: Array, view: Dictionary) -> void:
 func _on_action_rejected(reason: String, view: Dictionary) -> void:
 	# The server sends a fresh view with every rejection, so a client that had
 	# drifted is corrected here rather than left arguing with the server.
-	_adopt(view)
+	adopt_view(view)
 	_clear_in_flight()
 	action_refused.emit(reason)
 
 
 func _on_state_received(view: Dictionary) -> void:
-	_adopt(view)
+	apply_server_state(view)
+
+
+## Adopt an authoritative snapshot and settle any action still in flight.
+## This is what a `state` message does, and what an offline preview or a test
+## seeding a match needs - without it the controller waits forever for a
+## reply that is never coming.
+func apply_server_state(view: Dictionary) -> void:
+	adopt_view(view)
 	_clear_in_flight()
 
 
-func _adopt(view: Dictionary) -> void:
+## Adopt a server view. Public so tests and offline previews can seed a
+## match without a socket; in normal play only the Net signals call it.
+func adopt_view(view: Dictionary) -> void:
 	if view.is_empty():
 		return
 	if state == null:
@@ -106,7 +116,6 @@ func _clear_in_flight() -> void:
 	awaiting_server_changed.emit(false)
 
 
-# TODO: the board scene (tilemap, unit sprites, touch input) and the HUD hang
-# off these signals - see docs/ROADMAP.md Phase 1. Animate `events` from
-# action_confirmed, then let the adopted MatchState be the final word on
-# what is drawn.
+# TODO: animate the `events` from action_confirmed before adopting the view,
+# so a move or a hit plays out rather than snapping. The adopted MatchState
+# stays the final word on what is drawn.

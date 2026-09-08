@@ -42,9 +42,12 @@ protocol.
 - [x] Board scene: terrain tilemap, building ownership, units, fog, camera pan/zoom
 - [x] Movement/attack/selection overlays, driven by `MovementPreview`
 - [x] Headless board checks + a PNG preview renderer
-- [ ] Touch input: tap to select, tap to confirm a move (camera gestures done)
-- [ ] Wire `TurnController` signals to the board and animate `events`
-- [ ] HUD: funds, turn indicator, unit info panel, End Turn
+- [x] Touch input: tap to select, tap to move, tap an enemy to attack
+- [x] `scenes/match.tscn` - the playable screen, wired through `TurnController`
+- [x] Minimal action bar (Capture / Wait / Cancel / End Turn)
+- [ ] Animate the `events` from `action_confirmed` instead of snapping
+- [ ] Full HUD: funds, turn banner, unit info panel, damage forecast
+- [ ] Build menu when tapping an owned factory/airport/port
 - [ ] Lobby screen: create match, share code, join by code
 - [ ] Hotseat mode on one device (useful for testing without two phones)
 - [ ] Transport load/unload actions (data and state exist; engine does not)

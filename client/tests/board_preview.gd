@@ -1,32 +1,29 @@
 extends Node
-## Renders the fixture match to a PNG.
+## Renders the playable match screen to a PNG.
 ##
-## Unlike board_check.tscn this needs a real renderer, so it will not run
-## under --headless. On a machine without a display, use xvfb:
+## Drives the real scenes/match.tscn - board, action bar and controller -
+## seeded with the test fixture and with a unit selected, so the picture
+## shows what a player actually sees rather than a board in isolation.
 ##
-##   cd client && xvfb-run -a godot res://tests/board_preview.tscn
+## Needs a real renderer, so it will not run under --headless:
 ##
-## Writes to user://board_preview.png and prints the absolute path. Useful
-## for eyeballing a change to the theme or the tile generator without
-## building the whole app, and for attaching a picture to a review.
+##   cd client && xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
+##
+## Writes to user://board_preview.png and prints the absolute path.
 
-const BOARD_SCENE := preload("res://scenes/board.tscn")
+const MATCH_SCENE := preload("res://scenes/match.tscn")
 const OUTPUT := "user://board_preview.png"
+## The light tank, mid-map and in contact with an enemy.
+const SELECT_TILE := Vector2i(6, 4)
 
 
 func _ready() -> void:
-	var board: Board = BOARD_SCENE.instantiate()
-	add_child(board)
+	var match_scene := MATCH_SCENE.instantiate()
+	add_child(match_scene)
 
-	var state := MatchState.from_view(Fixtures.match_view())
-	board.render(state)
-
-	# Show what the player would see with the light tank selected: its real
-	# movement range from MovementPreview, plus what it could attack.
-	var tank: Dictionary = state.units["a1"]
-	board.show_movement_range(MovementPreview.reachable_tiles(state, tank).keys())
-	board.show_attack_range(MovementPreview.attackable_tiles(state, tank))
-	board.show_selection(Vector2i(int(tank["x"]), int(tank["y"])))
+	var controller: MatchController = match_scene.get_node("MatchController")
+	controller.load_view(Fixtures.match_view())
+	controller.tap_tile(SELECT_TILE)
 
 	# Let the renderer settle before grabbing the frame.
 	await RenderingServer.frame_post_draw

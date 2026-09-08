@@ -12,6 +12,10 @@ extends Node2D
 ## into ground they have not scouted, so the movement range has to stay
 ## readable through the fog rather than being dimmed by it.
 
+## A tap on a tile. Emitted only for taps - a drag that pans the camera is
+## not a tap, and neither is a pinch.
+signal tile_tapped(tile: Vector2i)
+
 @onready var terrain_layer: TileMapLayer = $TerrainLayer
 @onready var fog_layer: FogOverlay = $FogLayer
 @onready var overlay_layer: TileOverlay = $OverlayLayer
@@ -114,6 +118,28 @@ func world_at_tile(tile: Vector2i) -> Vector2:
 	return Vector2(tile) * BoardTheme.TILE_SIZE
 
 
-# TODO (next pass): tap-to-select and tap-to-move. Board emits the tap, a
-# controller asks MovementPreview what to highlight, and confirms through
-# TurnController - keeping input, preview and submission separable.
+## --- input -------------------------------------------------------------
+##
+## The board only reports *where* the player tapped. What that means - select,
+## move, attack - is MatchController's decision. Keeping the two apart is what
+## lets the interaction rules be tested without synthesising input events.
+##
+## Only touch events are handled: the project enables
+## pointing/emulate_touch_from_mouse, so mouse clicks arrive here as touches
+## too, and listening to both families would fire every tap twice.
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and not event.pressed:
+		_resolve_tap(event.position)
+
+
+func _resolve_tap(screen_position: Vector2) -> void:
+	# A release that ended a pan or pinch is not a tap.
+	if camera.was_dragged():
+		return
+
+	var world: Vector2 = get_viewport().get_canvas_transform().affine_inverse() * screen_position
+	var tile := tile_at_world(world)
+	if state != null and not state.in_bounds(tile.x, tile.y):
+		return
+	tile_tapped.emit(tile)

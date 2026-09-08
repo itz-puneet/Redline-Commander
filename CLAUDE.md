@@ -67,8 +67,10 @@ layout of the code, so keep them that way.
 
 ## Current status
 
-Scaffold with a working, tested rules engine and network layer; no rendering or
-UI yet. See `docs/ROADMAP.md` for what's implemented vs. what's next.
+Rules engine, network layer, board rendering and touch input all work and are
+tested. A player can select a unit, see its range, move, attack, capture, and
+end their turn. Still missing before it is a game: animation of server events,
+a real HUD, a lobby, and art. See `docs/ROADMAP.md`.
 
 ## Where to start
 
@@ -90,9 +92,21 @@ npm run verify:data  # fail if client/data has drifted from shared/data
 cd client
 godot --headless res://tests/boot_check.tscn    # autoloads, data tables, rules
 godot --headless res://tests/board_check.tscn   # the board renderer
-xvfb-run -a godot res://tests/board_preview.tscn  # render a PNG to look at
+godot --headless res://tests/input_check.tscn   # what a tap on a tile does
+
+# These need a real renderer - use xvfb on a headless machine.
+xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
+xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
 ```
 
-`godot --check-only --script <file>` reports false "Identifier not found"
-errors for the autoloads (`GameData`, `Net`, `PlayerIdentity`) because that
-mode does not register them. Use the boot check to validate the client.
+Two Godot gotchas worth knowing:
+
+- `godot --check-only --script <file>` reports false "Identifier not found"
+  errors for the autoloads (`GameData`, `Net`, `PlayerIdentity`) and for
+  `class_name` types, because that mode does not register them. Use the
+  checks above to validate the client. If a `class_name` you just added is
+  not found, run `godot --headless --import` to refresh the class cache.
+- Under `--headless` the dummy display server never dispatches synthesised
+  input, so `Input.parse_input_event` and `Viewport.push_input` go nowhere
+  and input tests would pass vacuously. That is why `gesture_check` needs
+  xvfb, and why it fails loudly if nothing was delivered.

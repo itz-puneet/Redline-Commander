@@ -108,8 +108,18 @@ TileSet is generated at runtime from `terrain.json` rather than authored, so
 the repo carries no placeholder art and a new terrain type appears on the
 board without touching a `.tres`.
 
-Touch input for selecting and ordering units is not wired yet — only camera
-gestures. See `docs/ROADMAP.md` Phase 3.
+Input is split in two so the interesting half is testable. `Board` reports
+only *where* the player tapped; `MatchController` decides what that means —
+select, move, attack — and submits through `TurnController`. Its entry point
+`tap_tile()` takes a tile, so the interaction rules are exercised by feeding
+tiles rather than synthesising touch events; the thin layer in front of it
+(screen coordinates, telling a tap from a pan) is covered separately by
+`gesture_check`, which needs a real display server.
+
+`MatchController` holds exactly one piece of UI state — which unit is
+selected — and re-validates it against every server view rather than trusting
+it. A unit that died, moved, or was spent while the player was deciding
+cannot leave a stale selection behind.
 
 ## Message flow
 

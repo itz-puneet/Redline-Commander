@@ -8,7 +8,7 @@ config_version=5
 config/name="Redline Commander"
 config/description="Turn-based tactical strategy for Android."
 config/version="0.2.0"
-run/main_scene=""
+run/main_scene="res://scenes/match.tscn"
 config/features=PackedStringArray("4.3", "Mobile")
 config/icon="res://icon.svg"
 

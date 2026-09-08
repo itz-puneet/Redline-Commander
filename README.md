@@ -29,8 +29,8 @@ redline-commander/
 ├── client/                     # Godot project
 │   ├── project.godot
 │   ├── data/                   # GENERATED copy of shared/data - do not edit
-│   ├── scenes/board.tscn       # The board: terrain, fog, overlays, units, camera
-│   ├── tests/                  # Headless checks + a PNG preview renderer
+│   ├── scenes/                 # match.tscn (the playable screen), board, action bar
+│   ├── tests/                  # Checks + a PNG preview renderer
 │   └── scripts/
 │       ├── data/game_data.gd         # autoload: the shared tables
 │       ├── net/player_identity.gd    # autoload: stable per-install player id
@@ -44,6 +44,8 @@ redline-commander/
 │       ├── board/fog_overlay.gd      # dims tiles outside vision
 │       ├── board/tile_overlay.gd     # movement/attack/selection highlights
 │       ├── board/board_camera.gd     # pan and zoom (camera gestures only)
+│       ├── ui/action_bar.gd          # Capture / Wait / Cancel / End Turn
+│       ├── match_controller.gd       # what a tap means: select, move, attack
 │       └── turn_controller.gd        # sends one action, waits, adopts result
 └── server/
     ├── src/
@@ -73,9 +75,11 @@ project. Point `Net.server_url` at your server.
 ```bash
 cd client
 godot --headless res://tests/boot_check.tscn    # 33 checks: autoloads, data, rules
-godot --headless res://tests/board_check.tscn   # 26 checks: the board renderer
+godot --headless res://tests/board_check.tscn   # 28 checks: the board renderer
+godot --headless res://tests/input_check.tscn   # 34 checks: what a tap does
 
-# See it. Needs a real renderer, so use xvfb on a headless machine.
+# These need a real renderer, so use xvfb on a headless machine.
+xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
 ```
 
@@ -102,9 +106,10 @@ records what the first scaffold got wrong and why it changed.
 
 ## Status
 
-Not playable yet: the rules engine and networking work and are tested, but
-there is no rendering or UI. See `docs/ROADMAP.md` — Phase 3 is the board
-scene and touch input.
+The loop works: select a unit, see its range, move, attack, capture, end turn
+— validated by the server at every step. Missing before it is a game:
+animation of server events, a full HUD, a lobby to start a match from, and
+art. See `docs/ROADMAP.md`.
 
 **Do not expose the server publicly yet.** Client tokens are not verified, so
 a client can currently claim any player id (`TODO(auth)` in

@@ -3,21 +3,34 @@ extends Camera2D
 ## Camera framing and navigation for the board.
 ##
 ## Handles *camera* gestures only - drag to pan, wheel or pinch to zoom. Unit
-## selection is not here: it belongs to the board's input handling so that a
-## tap which selects a unit and a drag which pans the map stay separable.
+## selection is not here: it belongs to the board, so that a tap which
+## selects and a drag which pans stay separable.
+##
+## The project sets pointing/emulate_touch_from_mouse, so a mouse drag also
+## arrives as InputEventScreenDrag. This listens to the touch events ONLY
+## (plus the wheel, which has no touch equivalent) - handling both families
+## would apply every pan twice on desktop.
 ##
 ## Uses _unhandled_input so HUD controls get first refusal on every event.
 
 const MIN_ZOOM := 0.5
 const MAX_ZOOM := 4.0
-## A press that moves further than this is a pan, not a tap.
+## A gesture that travels further than this is a pan, not a tap.
 const DRAG_THRESHOLD := 8.0
 
+## Screen-space height at the bottom of the viewport that the HUD covers.
+## The camera frames the map into what is left, so the bottom row of the
+## board does not end up hidden behind the action bar.
+var bottom_inset: float = 0.0
+
 var _map_rect := Rect2()
-var _dragging := false
-var _drag_distance := 0.0
 var _touch_points: Dictionary = {}
 var _pinch_distance := 0.0
+## Distance travelled by the current or most recently finished gesture. Reset
+## on press, not on release, so the board can still tell - on the release
+## event itself - whether the gesture that just ended was a drag.
+var _gesture_distance := 0.0
+var _gesture_was_multi_touch := false
 
 
 ## Frame the whole map with a little margin. Called whenever a new match is
@@ -31,54 +44,53 @@ func frame_map(width: int, height: int) -> void:
 	if viewport.x <= 0.0 or viewport.y <= 0.0 or _map_rect.size.x <= 0.0:
 		return
 
+	var usable_height: float = maxf(viewport.y - bottom_inset, 1.0)
 	var margin := 1.08
 	var fit: float = minf(viewport.x / (_map_rect.size.x * margin),
-		viewport.y / (_map_rect.size.y * margin))
+		usable_height / (_map_rect.size.y * margin))
 	var level := clampf(fit, MIN_ZOOM, MAX_ZOOM)
 	zoom = Vector2(level, level)
 
+	# Look slightly below the map's centre so the map lands in the usable
+	# area rather than centred behind the HUD.
+	position.y += (bottom_inset * 0.5) / level
 
-## True while the player is panning, so the board can ignore the release that
-## ends a drag rather than treating it as a tap on a tile.
-func is_panning() -> bool:
-	return _dragging and _drag_distance > DRAG_THRESHOLD
+
+## Whether the gesture that just ended was a pan or pinch rather than a tap.
+## The board checks this on release to decide if the touch was a tap.
+func was_dragged() -> bool:
+	return _gesture_was_multi_touch or _gesture_distance > DRAG_THRESHOLD
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		_handle_mouse_button(event)
-	elif event is InputEventMouseMotion and _dragging:
-		_pan(event.relative)
-	elif event is InputEventScreenTouch:
+	if event is InputEventScreenTouch:
 		_handle_touch(event)
 	elif event is InputEventScreenDrag:
 		_handle_drag(event)
+	elif event is InputEventMouseButton:
+		_handle_wheel(event)
 
 
-func _handle_mouse_button(event: InputEventMouseButton) -> void:
-	match event.button_index:
-		MOUSE_BUTTON_LEFT:
-			_dragging = event.pressed
-			if event.pressed:
-				_drag_distance = 0.0
-		MOUSE_BUTTON_WHEEL_UP:
-			if event.pressed:
-				_apply_zoom(1.1)
-		MOUSE_BUTTON_WHEEL_DOWN:
-			if event.pressed:
-				_apply_zoom(1.0 / 1.1)
+func _handle_wheel(event: InputEventMouseButton) -> void:
+	if not event.pressed:
+		return
+	if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		_apply_zoom(1.1)
+	elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		_apply_zoom(1.0 / 1.1)
 
 
 func _handle_touch(event: InputEventScreenTouch) -> void:
 	if event.pressed:
+		# A new gesture starts here, so this is where the travel resets.
+		if _touch_points.is_empty():
+			_gesture_distance = 0.0
+			_gesture_was_multi_touch = false
 		_touch_points[event.index] = event.position
-		if _touch_points.size() == 1:
-			_dragging = true
-			_drag_distance = 0.0
+		if _touch_points.size() > 1:
+			_gesture_was_multi_touch = true
 	else:
 		_touch_points.erase(event.index)
-		if _touch_points.is_empty():
-			_dragging = false
 		_pinch_distance = 0.0
 
 
@@ -91,6 +103,7 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 
 	# Two fingers: zoom by the change in their separation.
 	if _touch_points.size() == 2:
+		_gesture_was_multi_touch = true
 		var points: Array = _touch_points.values()
 		var distance: float = (points[0] as Vector2).distance_to(points[1] as Vector2)
 		if _pinch_distance > 0.0 and distance > 0.0:
@@ -99,7 +112,7 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 
 
 func _pan(relative: Vector2) -> void:
-	_drag_distance += relative.length()
+	_gesture_distance += relative.length()
 	position -= relative / zoom.x
 	_clamp_to_map()
 

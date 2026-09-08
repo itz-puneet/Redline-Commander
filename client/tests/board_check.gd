@@ -25,6 +25,7 @@ func _ready() -> void:
 	_check_fog(state)
 	_check_overlays(state)
 	_check_reconciliation(state)
+	_check_hud_inset(state)
 	_check_coordinates()
 
 	if _failures == 0:
@@ -142,6 +143,26 @@ func _check_reconciliation(state: MatchState) -> void:
 	_check("a moved unit is repositioned",
 		_board.unit_node("a1").position == Vector2(7, 4) * BoardTheme.TILE_SIZE)
 	_check("a destroyed unit's node is released", _board.unit_node("b1") == null)
+
+
+## The camera must keep the board clear of the HUD, or the bottom row of
+## the map is unreachable by touch.
+func _check_hud_inset(state: MatchState) -> void:
+	var camera := _board.camera
+	camera.bottom_inset = 0.0
+	camera.frame_map(state.map_width, state.map_height)
+	var centred := camera.position.y
+	var full_zoom := camera.zoom.x
+
+	camera.bottom_inset = 72.0
+	camera.frame_map(state.map_width, state.map_height)
+	_check("a HUD inset shifts the view up", camera.position.y > centred,
+		"%f -> %f" % [centred, camera.position.y])
+	_check("a HUD inset does not zoom in past the full-viewport fit",
+		camera.zoom.x <= full_zoom + 0.0001,
+		"%f -> %f" % [full_zoom, camera.zoom.x])
+
+	camera.bottom_inset = 0.0
 
 
 func _check_coordinates() -> void:
