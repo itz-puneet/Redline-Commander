@@ -22,6 +22,8 @@ extends Node
 
 signal selection_changed(unit_id: String)
 signal action_refused(reason: String)
+## Emitted around an event animation, so the HUD can lock while it plays.
+signal animating_changed(animating: bool)
 
 @export var board_path: NodePath = NodePath("../Board")
 @export var turn_controller_path: NodePath = NodePath("../TurnController")
@@ -31,9 +33,12 @@ var _board: Board = null
 var _turns: TurnController = null
 var _bar: Node = null
 
+var _animator: EventAnimator = null
+
 var _selected_id: String = ""
 var _move_range: Dictionary = {}       ## Vector2i -> cost
 var _attack_targets: Array = []        ## Vector2i
+var _animating := false
 
 
 func _ready() -> void:
@@ -44,6 +49,13 @@ func _ready() -> void:
 	if _board == null or _turns == null:
 		push_error("MatchController: board or turn controller not found")
 		return
+
+	# The animator lives here rather than on the board because it is part of
+	# responding to the server, not part of drawing a state.
+	_animator = EventAnimator.new()
+	_animator.name = "EventAnimator"
+	_animator.setup(_board)
+	add_child(_animator)
 
 	_board.tile_tapped.connect(tap_tile)
 	_turns.action_confirmed.connect(_on_action_settled)
@@ -102,7 +114,10 @@ func refresh() -> void:
 
 func tap_tile(tile: Vector2i) -> void:
 	var current := state()
-	if current == null or not _turns.can_act():
+	# Taps during an animation are dropped rather than queued: the board is
+	# showing stale positions while it plays, so a tap on what is drawn would
+	# mean something different by the time it landed.
+	if current == null or _animating or not _turns.can_act():
 		return
 
 	var tapped: Dictionary = current.unit_at(tile.x, tile.y)
@@ -165,10 +180,37 @@ func _on_end_turn_pressed() -> void:
 
 ## --- server responses --------------------------------------------------
 
-func _on_action_settled(_events: Array) -> void:
+## The board is deliberately NOT refreshed until the events have played:
+## until then the unit nodes still stand where they were, which is what the
+## animation moves away from. The refresh afterwards is what makes the
+## result exact - the animation is decoration, the adopted state is truth.
+func _on_action_settled(events: Array) -> void:
+	if _animator != null and not EventAnimator.plan(events).is_empty():
+		_set_animating(true)
+		await _animator.play(events)
+		_set_animating(false)
+
 	# The selection survives a move so the player can attack or capture with
 	# the same unit; refresh() drops it once the unit has fully acted.
 	refresh()
+
+
+func is_animating() -> bool:
+	return _animating
+
+
+## Instant animations, for tests and for anyone who wants the snap back.
+func set_animation_scale(scale: float) -> void:
+	if _animator != null:
+		_animator.duration_scale = scale
+
+
+func _set_animating(animating: bool) -> void:
+	if _animating == animating:
+		return
+	_animating = animating
+	_refresh_bar()
+	animating_changed.emit(animating)
 
 
 func _on_action_refused(reason: String) -> void:
@@ -252,12 +294,14 @@ func _refresh_bar() -> void:
 		return
 	var current := state()
 	var has_selection := not _selected_id.is_empty()
-	var busy: bool = _turns.is_awaiting_server()
+	var busy: bool = _turns.is_awaiting_server() or _animating
 
 	var status := "Connecting..."
 	if current != null:
 		if current.is_finished():
 			status = "Victory" if current.winner_slot == current.you_slot else "Defeat"
+		elif _animating:
+			status = "..."
 		elif busy:
 			status = "Sending..."
 		elif not current.is_my_turn():

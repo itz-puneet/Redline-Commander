@@ -68,9 +68,9 @@ layout of the code, so keep them that way.
 ## Current status
 
 Playable end to end: connect, create or join a match by code, and fight it
-out - board, fog, touch input and server validation all working, verified
-against a real server by `tools/live-check.sh`. Still missing before it is a
-game: animation of server events, a full HUD, a build menu, and art. Token
+out - board, fog, touch input, animated moves and combat, all validated by
+the server and verified against a real one by `tools/live-check.sh`. Still
+missing before it is a game: a full HUD, a build menu, and art. Token
 verification is still outstanding and blocks any public deployment. See
 `docs/ROADMAP.md`.
 
@@ -96,11 +96,13 @@ godot --headless res://tests/boot_check.tscn    # autoloads, data tables, rules
 godot --headless res://tests/board_check.tscn   # the board renderer
 godot --headless res://tests/input_check.tscn   # what a tap on a tile does
 godot --headless res://tests/lobby_check.tscn   # the lobby and screen routing
+godot --headless res://tests/animation_check.tscn  # event animation
 
 # These need a real renderer - use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/lobby_preview.tscn
+xvfb-run -a godot --resolution 1280x720 res://tests/animation_preview.tscn
 
 # End to end against a real server: builds, hosts a match, runs the client.
 tools/live-check.sh

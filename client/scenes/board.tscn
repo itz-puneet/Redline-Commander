@@ -18,5 +18,7 @@ script = ExtResource("3")
 
 [node name="UnitLayer" type="Node2D" parent="."]
 
+[node name="EffectsLayer" type="Node2D" parent="."]
+
 [node name="BoardCamera" type="Camera2D" parent="."]
 script = ExtResource("4")

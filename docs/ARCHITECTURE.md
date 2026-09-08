@@ -125,6 +125,21 @@ selected — and re-validates it against every server view rather than trusting
 it. A unit that died, moved, or was spent while the player was deciding
 cannot leave a stale selection behind.
 
+Server events are animated before the new state is drawn. The ordering is
+the whole trick: `TurnController` adopts the incoming view immediately, but
+`MatchController` holds off rendering until `EventAnimator` has played the
+events — so the unit nodes still stand where they were, and there is
+something to animate away from. The render afterwards is what makes the
+result exact, so a dropped frame or an abandoned tween cannot leave the board
+disagreeing with the server. Taps are dropped while a sequence plays, because
+the board is showing stale positions and a tap on what is drawn would mean
+something else by the time it landed.
+
+`EventAnimator.plan()` is pure — events in, steps out — so the sequencing is
+asserted with no waiting, and `play()` tolerates anything missing: a unit
+revealed by the very update being animated has no node yet, which is ordinary
+rather than an error.
+
 `App` is the only place that swaps screens, and the lobby and the board know
 nothing about each other. The lobby is a view that emits intents
 (`create_requested`, `join_requested`, …) and never touches `Net` itself,

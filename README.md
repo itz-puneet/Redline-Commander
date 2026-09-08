@@ -44,6 +44,7 @@ redline-commander/
 │       ├── board/fog_overlay.gd      # dims tiles outside vision
 │       ├── board/tile_overlay.gd     # movement/attack/selection highlights
 │       ├── board/board_camera.gd     # pan and zoom (camera gestures only)
+│       ├── board/event_animator.gd   # plays server events before the render
 │       ├── net/session_store.gd       # autoload: last match, for rejoining
 │       ├── app.gd                     # owns the connection, swaps screens
 │       ├── ui/lobby_screen.gd         # connect, create, join by code, rejoin
@@ -81,6 +82,7 @@ godot --headless res://tests/boot_check.tscn    # 33 checks: autoloads, data, ru
 godot --headless res://tests/board_check.tscn   # 28 checks: the board renderer
 godot --headless res://tests/input_check.tscn   # 34 checks: what a tap does
 godot --headless res://tests/lobby_check.tscn   # 26 checks: lobby and routing
+godot --headless res://tests/animation_check.tscn  # 24 checks: event animation
 
 # These need a real renderer, so use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
@@ -122,8 +124,11 @@ the code, and your friend joins from theirs — then move, attack and capture
 with the server validating every step and fog of war enforced per player.
 `tools/live-check.sh` proves that whole path in one command.
 
-Missing before it is a game: animation of server events, a full HUD, a build
-menu, and art. See `docs/ROADMAP.md`.
+Moves walk their path, attacks lunge and pop damage numbers, kills fade out
+and captures flash.
+
+Missing before it is a game: a full HUD, a build menu, and art. See
+`docs/ROADMAP.md`.
 
 **Do not expose the server publicly yet.** Client tokens are not verified, so
 a client can currently claim any player id (`TODO(auth)` in

@@ -45,7 +45,7 @@ protocol.
 - [x] Touch input: tap to select, tap to move, tap an enemy to attack
 - [x] `scenes/match.tscn` - the playable screen, wired through `TurnController`
 - [x] Minimal action bar (Capture / Wait / Cancel / End Turn)
-- [ ] Animate the `events` from `action_confirmed` instead of snapping
+- [x] Animate the `events` from `action_confirmed` instead of snapping
 - [ ] Full HUD: funds, turn banner, unit info panel, damage forecast
 - [ ] Build menu when tapping an owned factory/airport/port
 - [x] Lobby screen: connect, create match, share code, join by code, rejoin

@@ -36,6 +36,11 @@ func bind(data: Dictionary) -> void:
 	fuel = -1 if data.get("fuel") == null else int(data.get("fuel"))
 	ammo = -1 if data.get("ammo") == null else int(data.get("ammo"))
 	position = Vector2(grid_position) * BoardTheme.TILE_SIZE
+	# bind() fully defines how this node looks. Animations move, fade and
+	# scale these nodes, and one that is abandoned part-way (a newer update
+	# arriving mid-sequence) would otherwise stay ghosted forever.
+	modulate = Color.WHITE
+	scale = Vector2.ONE
 	queue_redraw()
 
 

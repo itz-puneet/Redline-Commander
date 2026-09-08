@@ -8,9 +8,10 @@ extends Node2D
 ## live match, a replay, or the synthetic fixture the tests use.
 ##
 ## Node order sets the draw order: terrain, then fog, then range overlays,
-## then units. Fog sits UNDER the overlays deliberately - a player can move
-## into ground they have not scouted, so the movement range has to stay
-## readable through the fog rather than being dimmed by it.
+## then units, then transient effects. Fog sits UNDER the overlays
+## deliberately - a player can move into ground they have not scouted, so the
+## movement range has to stay readable through the fog rather than being
+## dimmed by it.
 
 ## A tap on a tile. Emitted only for taps - a drag that pans the camera is
 ## not a tap, and neither is a pinch.
@@ -20,6 +21,8 @@ signal tile_tapped(tile: Vector2i)
 @onready var fog_layer: FogOverlay = $FogLayer
 @onready var overlay_layer: TileOverlay = $OverlayLayer
 @onready var unit_layer: Node2D = $UnitLayer
+## Damage numbers and capture flashes, drawn above the units.
+@onready var effects_layer: Node2D = $EffectsLayer
 @onready var camera: BoardCamera = $BoardCamera
 
 var state: MatchState = null
