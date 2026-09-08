@@ -1,0 +1,79 @@
+{
+  "_comment": "Canonical terrain table for Redline Commander. Loaded by BOTH server and client. move_cost is keyed by unit move_type; null means impassable for that move_type.",
+  "_schema": {
+    "defense": "percent damage mitigation applied in combat, scaled by the defender's remaining HP",
+    "move_cost": "movement points consumed to ENTER this tile, per move_type; null = impassable",
+    "capturable": "may be captured by units with can_capture",
+    "income": "funds per turn granted to the owner",
+    "repairs": "move_types this tile repairs/resupplies for its owner each turn; [] = none",
+    "builds": "true if a production building (see units.json built_at)",
+    "is_hq": "losing this tile loses the match"
+  },
+  "terrain": {
+    "plains": {
+      "display_name": "Plains", "defense": 10,
+      "move_cost": { "foot": 1, "wheels": 2, "treads": 1, "air": 1, "sea": null },
+      "capturable": false, "income": 0, "repairs": [], "builds": false, "is_hq": false
+    },
+    "road": {
+      "display_name": "Road", "defense": 0,
+      "move_cost": { "foot": 1, "wheels": 1, "treads": 1, "air": 1, "sea": null },
+      "capturable": false, "income": 0, "repairs": [], "builds": false, "is_hq": false
+    },
+    "forest": {
+      "display_name": "Forest", "defense": 30,
+      "move_cost": { "foot": 1, "wheels": 3, "treads": 2, "air": 1, "sea": null },
+      "capturable": false, "income": 0, "repairs": [], "builds": false, "is_hq": false
+    },
+    "mountain": {
+      "display_name": "Mountain", "defense": 40,
+      "move_cost": { "foot": 2, "wheels": null, "treads": null, "air": 1, "sea": null },
+      "capturable": false, "income": 0, "repairs": [], "builds": false, "is_hq": false
+    },
+    "river": {
+      "display_name": "River", "defense": 0,
+      "move_cost": { "foot": 2, "wheels": null, "treads": null, "air": 1, "sea": null },
+      "capturable": false, "income": 0, "repairs": [], "builds": false, "is_hq": false
+    },
+    "shallow_water": {
+      "display_name": "Shallow Water", "defense": 0,
+      "move_cost": { "foot": null, "wheels": null, "treads": null, "air": 1, "sea": 1 },
+      "capturable": false, "income": 0, "repairs": [], "builds": false, "is_hq": false
+    },
+    "deep_water": {
+      "display_name": "Deep Water", "defense": 0,
+      "move_cost": { "foot": null, "wheels": null, "treads": null, "air": 1, "sea": 1 },
+      "capturable": false, "income": 0, "repairs": [], "builds": false, "is_hq": false
+    },
+    "reef": {
+      "display_name": "Reef", "defense": 20,
+      "move_cost": { "foot": null, "wheels": null, "treads": null, "air": 1, "sea": 2 },
+      "capturable": false, "income": 0, "repairs": [], "builds": false, "is_hq": false
+    },
+    "city": {
+      "display_name": "City", "defense": 30,
+      "move_cost": { "foot": 1, "wheels": 1, "treads": 1, "air": 1, "sea": null },
+      "capturable": true, "income": 1000, "repairs": ["foot", "wheels", "treads"], "builds": false, "is_hq": false
+    },
+    "factory": {
+      "display_name": "Factory", "defense": 30,
+      "move_cost": { "foot": 1, "wheels": 1, "treads": 1, "air": 1, "sea": null },
+      "capturable": true, "income": 1000, "repairs": ["foot", "wheels", "treads"], "builds": true, "is_hq": false
+    },
+    "airport": {
+      "display_name": "Airport", "defense": 30,
+      "move_cost": { "foot": 1, "wheels": 1, "treads": 1, "air": 1, "sea": null },
+      "capturable": true, "income": 1000, "repairs": ["air"], "builds": true, "is_hq": false
+    },
+    "port": {
+      "display_name": "Port", "defense": 30,
+      "move_cost": { "foot": 1, "wheels": 1, "treads": 1, "air": 1, "sea": 1 },
+      "capturable": true, "income": 1000, "repairs": ["sea"], "builds": true, "is_hq": false
+    },
+    "hq": {
+      "display_name": "Headquarters", "defense": 40,
+      "move_cost": { "foot": 1, "wheels": 1, "treads": 1, "air": 1, "sea": null },
+      "capturable": true, "income": 1000, "repairs": ["foot", "wheels", "treads"], "builds": false, "is_hq": true
+    }
+  }
+}

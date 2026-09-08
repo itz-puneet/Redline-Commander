@@ -1,0 +1,21 @@
+# Godot
+.godot/
+.import/
+export.cfg
+export_presets.cfg
+*.translation
+android/
+
+# Node
+node_modules/
+build/
+dist/
+*.log
+.env
+
+# Server runtime state (matches in progress)
+server/.matches/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,50 @@
+{
+  "_comment": "Base damage percent, attacker -> defender, for Redline Commander. Original placeholder values derived from the role matchups in docs/GAME_DESIGN.md - not taken from any existing game's tables. 0 means the attacker cannot engage that target at all. Unarmed units (transport_ship) have no row. Rebalance freely; both server and client read this same file.",
+  "matrix": {
+    "infantry": {
+      "infantry": 55, "anti_tank_infantry": 45, "recon": 70, "artillery": 60,
+      "light_tank": 5, "heavy_tank": 1, "anti_air": 15,
+      "helicopter": 25, "fighter_jet": 0, "transport_ship": 15
+    },
+    "anti_tank_infantry": {
+      "infantry": 65, "anti_tank_infantry": 55, "recon": 85, "artillery": 75,
+      "light_tank": 70, "heavy_tank": 55, "anti_air": 65,
+      "helicopter": 30, "fighter_jet": 0, "transport_ship": 25
+    },
+    "recon": {
+      "infantry": 75, "anti_tank_infantry": 70, "recon": 65, "artillery": 45,
+      "light_tank": 6, "heavy_tank": 1, "anti_air": 10,
+      "helicopter": 10, "fighter_jet": 0, "transport_ship": 20
+    },
+    "artillery": {
+      "infantry": 90, "anti_tank_infantry": 85, "recon": 80, "artillery": 75,
+      "light_tank": 70, "heavy_tank": 45, "anti_air": 75,
+      "helicopter": 0, "fighter_jet": 0, "transport_ship": 55
+    },
+    "light_tank": {
+      "infantry": 75, "anti_tank_infantry": 70, "recon": 85, "artillery": 70,
+      "light_tank": 55, "heavy_tank": 15, "anti_air": 65,
+      "helicopter": 10, "fighter_jet": 0, "transport_ship": 50
+    },
+    "heavy_tank": {
+      "infantry": 105, "anti_tank_infantry": 95, "recon": 105, "artillery": 105,
+      "light_tank": 85, "heavy_tank": 55, "anti_air": 105,
+      "helicopter": 22, "fighter_jet": 0, "transport_ship": 75
+    },
+    "anti_air": {
+      "infantry": 105, "anti_tank_infantry": 95, "recon": 60, "artillery": 50,
+      "light_tank": 25, "heavy_tank": 10, "anti_air": 45,
+      "helicopter": 105, "fighter_jet": 65, "transport_ship": 30
+    },
+    "helicopter": {
+      "infantry": 75, "anti_tank_infantry": 70, "recon": 55, "artillery": 65,
+      "light_tank": 55, "heavy_tank": 25, "anti_air": 6,
+      "helicopter": 65, "fighter_jet": 0, "transport_ship": 45
+    },
+    "fighter_jet": {
+      "infantry": 0, "anti_tank_infantry": 0, "recon": 0, "artillery": 0,
+      "light_tank": 0, "heavy_tank": 0, "anti_air": 0,
+      "helicopter": 100, "fighter_jet": 55, "transport_ship": 0
+    }
+  }
+}

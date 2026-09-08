@@ -1,0 +1,86 @@
+{
+  "id": "crossing",
+  "display_name": "Redline Crossing",
+  "max_players": 2,
+  "width": 15,
+  "height": 10,
+  "_legend": {
+    "p": "plains",
+    "r": "road",
+    "f": "forest",
+    "m": "mountain",
+    "v": "river",
+    "s": "shallow_water",
+    "d": "deep_water",
+    "e": "reef",
+    "C": "city",
+    "F": "factory",
+    "A": "airport",
+    "P": "port",
+    "H": "hq"
+  },
+  "tiles": [
+    "HCFpfmpppmpfpCF",
+    "CrrrpfpvpfpprrC",
+    "prrpppvvvpppprp",
+    "pAprpppvpppprfp",
+    "mppprrrvrrrpppm",
+    "mppprrrvrrrpppm",
+    "pfprpppvpppprAp",
+    "prrpppvvvpppprp",
+    "CrrrpfpvpfpprrC",
+    "FCpfpmpppmpfFCH"
+  ],
+  "_tile_owners_comment": "Ownership is by index: 0 = neutral, 1 = player slot 1, 2 = player slot 2. Only capturable tiles may be non-zero.",
+  "tile_owners": [
+    "111000000000000",
+    "100000000000000",
+    "000000000000000",
+    "010000000000000",
+    "000000000000000",
+    "000000000000000",
+    "000000000000020",
+    "000000000000000",
+    "000000000000002",
+    "000000000000222"
+  ],
+  "start_units": [
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 1,
+      "y": 1
+    },
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "slot": 1,
+      "unit_type": "light_tank",
+      "x": 3,
+      "y": 1
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 13,
+      "y": 8
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 12,
+      "y": 7
+    },
+    {
+      "slot": 2,
+      "unit_type": "light_tank",
+      "x": 11,
+      "y": 8
+    }
+  ],
+  "_note": "Crossing is a land map: it has no water and no ports, so transport_ship is not buildable here. Add shallow/deep water and P tiles for a naval map."
+}

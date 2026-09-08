@@ -1,0 +1,46 @@
+; Engine configuration file for Redline Commander.
+; Open the client/ folder in Godot 4.3+ to work on it.
+
+config_version=5
+
+[application]
+
+config/name="Redline Commander"
+config/description="Turn-based tactical strategy for Android."
+config/version="0.2.0"
+run/main_scene=""
+config/features=PackedStringArray("4.3", "Mobile")
+config/icon="res://icon.svg"
+
+[autoload]
+
+; Loaded before anything else: the data tables, this device's stable player
+; identity, and the connection to the match server.
+GameData="*res://scripts/data/game_data.gd"
+PlayerIdentity="*res://scripts/net/player_identity.gd"
+Net="*res://scripts/net/network_client.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+; Phones vary wildly in aspect ratio; scale the whole canvas and let the
+; extra space expand rather than letterboxing or distorting the grid.
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=0
+
+[input_devices]
+
+; Touch is the primary input; this also lets mouse clicks drive the same
+; handlers while testing on desktop.
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+; gl_compatibility rather than the Vulkan "mobile" renderer: a 2D tactics
+; grid needs nothing Vulkan offers, and the GL path covers far more Android
+; devices. Revisit only if the art direction starts demanding it.
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=0

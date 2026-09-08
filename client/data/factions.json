@@ -1,0 +1,35 @@
+{
+  "_comment": "Faction traits for Redline Commander. All names and effects are original. A faction is a passive modifier set plus one chargeable active Field Directive - see docs/GAME_DESIGN.md.",
+  "factions": {
+    "crimson_alliance": {
+      "display_name": "Crimson Alliance",
+      "summary": "Balanced. No bonuses, no penalties. The default and tutorial faction.",
+      "modifiers": {},
+      "directive": { "id": "overdrive", "display_name": "Overdrive", "charge_cost": 100, "effect": { "attack_pct": 20, "duration_turns": 1 } }
+    },
+    "azure_federation": {
+      "display_name": "Azure Federation",
+      "summary": "Naval and indirect-fire units cost less.",
+      "modifiers": { "cost_pct": { "transport_ship": -20, "artillery": -20 } },
+      "directive": { "id": "barrage", "display_name": "Barrage", "charge_cost": 100, "effect": { "indirect_range_bonus": 1, "duration_turns": 1 } }
+    },
+    "verdant_union": {
+      "display_name": "Verdant Union",
+      "summary": "Ground units defend better in forest and mountains.",
+      "modifiers": { "terrain_defense_bonus_pct": { "forest": 10, "mountain": 10 } },
+      "directive": { "id": "fortify", "display_name": "Fortify", "charge_cost": 100, "effect": { "defense_pct": 20, "duration_turns": 1 } }
+    },
+    "solaris_directorate": {
+      "display_name": "Solaris Directorate",
+      "summary": "All units see one tile further.",
+      "modifiers": { "vision_bonus": 1 },
+      "directive": { "id": "uplink", "display_name": "Uplink", "charge_cost": 100, "effect": { "reveal_map_turns": 1 } }
+    },
+    "umbra_syndicate": {
+      "display_name": "Umbra Syndicate",
+      "summary": "Campaign antagonist. Units cost 10% more but hit 10% harder.",
+      "modifiers": { "global_cost_pct": 10, "global_attack_pct": 10 },
+      "directive": { "id": "blackout", "display_name": "Blackout", "charge_cost": 100, "effect": { "enemy_vision_penalty": 1, "duration_turns": 1 } }
+    }
+  }
+}
