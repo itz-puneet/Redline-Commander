@@ -31,12 +31,14 @@ protocol.
 - [x] Match persistence (`MatchStore`) so a match survives restarts
 - [x] Reconnect / resume by persistent `playerId`
 - [x] End-to-end protocol smoke test (`npm run smoke`)
+- [x] Headless client boot check (`godot --headless res://tests/boot_check.tscn`)
 - [ ] **Authenticate `token`** — currently unverified, so a client can claim
       any seat. Blocks any public deployment. (`TODO(auth)` in
       `server/src/net/server.ts`)
 - [ ] Rate limiting per connection
 
 ## Phase 3 — Make it playable (next up)
+- [x] Project imports cleanly in Godot 4.3 and all scripts compile
 - [ ] Board scene: TileMapLayer for terrain, unit sprites, camera pan/zoom
 - [ ] Touch input: tap to select, movement overlay, tap to confirm
 - [ ] Wire `TurnController` signals to the board and animate `events`

@@ -29,6 +29,7 @@ redline-commander/
 ├── client/                     # Godot project
 │   ├── project.godot
 │   ├── data/                   # GENERATED copy of shared/data - do not edit
+│   ├── tests/boot_check.tscn   # Headless client check (autoloads, data, rules)
 │   └── scripts/
 │       ├── data/game_data.gd         # autoload: the shared tables
 │       ├── net/player_identity.gd    # autoload: stable per-install player id
@@ -61,6 +62,16 @@ npm run smoke   # end-to-end protocol check (needs the server running)
 
 **Client:** install Godot 4.3+, then `Import` the `client/` folder as a
 project. Point `Net.server_url` at your server.
+
+```bash
+cd client
+godot --headless res://tests/boot_check.tscn   # 33 checks, no display needed
+```
+
+The boot check proves the autoloads come up, the data tables parsed, and the
+client-side logic agrees with the server's rules. Note that
+`godot --check-only --script <file>` reports false errors for these scripts —
+it does not register autoloads — so use the boot check, not that.
 
 **After editing game data:** run `tools/sync-shared-data.sh` to refresh
 `client/data`. `cd server && npm run verify:data` fails if they have drifted.

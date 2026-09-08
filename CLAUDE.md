@@ -86,4 +86,11 @@ npm run dev          # ts-node-dev, ws://localhost:2567/play
 npm test             # typecheck + rules engine tests
 npm run smoke        # end-to-end protocol check (server must be running)
 npm run verify:data  # fail if client/data has drifted from shared/data
+
+cd client
+godot --headless res://tests/boot_check.tscn   # client checks, no display needed
 ```
+
+`godot --check-only --script <file>` reports false "Identifier not found"
+errors for the autoloads (`GameData`, `Net`, `PlayerIdentity`) because that
+mode does not register them. Use the boot check to validate the client.
