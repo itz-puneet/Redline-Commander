@@ -232,5 +232,6 @@ func _explain(code: String, detail: String) -> String:
 		"invalid_player_id": return "This device's identity is malformed."
 		"invalid_token": return "This device's credentials are malformed."
 		"insecure_transport": return "The server refused an unencrypted connection. Use a wss:// address."
+		"rate_limited": return "The server is asking us to slow down. Try again in a moment."
 		"protocol_mismatch": return "Client and server versions do not match. %s" % detail
 		_: return detail if not detail.is_empty() else code.replace("_", " ")

@@ -89,7 +89,16 @@ layout of the code, so keep them that way.
    abandoned tween cannot leave the board wrong. Never animate *instead* of
    rendering.
 
-7. **A match is a persisted record, not a live connection.** Players drop,
+7. **The server stays up.** It holds live matches, so a crash drops everyone
+   mid-turn. `ws` emits `error` on a socket for protocol violations, and an
+   async event listener that rejects becomes an unhandled rejection - both
+   are fatal by default, which turns a frame-size *protection* into a
+   one-packet remote kill switch. Every socket gets an error listener, async
+   listeners catch their own failures, and `index.ts` logs unhandled
+   rejections rather than dying. Never add an `async` event listener without
+   a `.catch`.
+
+8. **A match is a persisted record, not a live connection.** Players drop,
    background the app, and take their turn hours later. Committed turns are
    written through `MatchStore` before being acknowledged, and a seat is keyed
    to a stable `playerId`, never a socket id.
@@ -103,7 +112,8 @@ real one by `tools/live-check.sh`. Still
 missing before it is a game: art, more maps, and a campaign.
 
 Devices authenticate on connect (trust on first use, see `server/src/auth`),
-and the server refuses unencrypted connections from anything but loopback.
+the server refuses unencrypted connections from anything but loopback, and
+messages, connections and match creation are rate limited.
 `docs/DEPLOYMENT.md` covers running it for real.
 
 ## Where to start

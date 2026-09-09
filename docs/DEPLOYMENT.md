@@ -124,8 +124,48 @@ thing TLS was protecting.
 | `REDLINE_TLS_CERT` / `REDLINE_TLS_KEY` | unset | Terminate TLS here (Option B). Both or neither. |
 | `REDLINE_TRUST_PROXY` | unset | Believe `X-Forwarded-Proto` from loopback (Option A) |
 | `REDLINE_ALLOW_INSECURE` | unset | Serve plaintext to remote hosts. Leaks device secrets. |
+| `REDLINE_MESSAGES_PER_SECOND` | `10` | Sustained message rate per player |
+| `REDLINE_CONNECTIONS_PER_IP` | `12` | Concurrent sockets from one address |
+| `REDLINE_MAX_PAYLOAD_BYTES` | `65536` | Largest frame accepted at all |
+| `REDLINE_DISABLE_RATE_LIMIT` | unset | Turn limiting off entirely |
 
-Only an exact `1` enables the flags; `true` and `yes` do not.
+Only an exact `1` enables the flags; `true` and `yes` do not. A nonsensical
+number falls back to the default rather than to zero, so a typo cannot
+silently disable a limit.
+
+## Rate limiting
+
+On by default. Four things are bounded, and the defaults are set so that
+ordinary play never comes near them:
+
+- **Messages per player** — 10/s sustained with 30 in hand. A brisk turn is
+  a handful of taps per second.
+- **New connections and concurrent sockets per address** — 60/minute and 12
+  at once.
+- **Match creation** — 10/minute per player. Each match is a file on disk.
+- **Frame size** — 64 KiB. An action is a few hundred bytes.
+
+**Behind a reverse proxy every connection appears to come from loopback**, so
+the per-address limits become a bound on total load rather than per-attacker.
+Real per-client limiting there belongs in the proxy. In nginx:
+
+```nginx
+limit_conn_zone  $binary_remote_addr zone=play_conn:10m;
+limit_req_zone   $binary_remote_addr zone=play_req:10m rate=30r/m;
+
+server {
+    # ...
+    location /play {
+        limit_conn play_conn 12;
+        limit_req  zone=play_req burst=20 nodelay;
+        # ...proxy_pass as above
+    }
+}
+```
+
+The per-player message and match-creation limits still apply regardless of
+where the connection appears to come from, because those are keyed by
+identity rather than address.
 
 ## Checking what you deployed
 

@@ -11,6 +11,7 @@
  * three methods when you outgrow it - nothing else in the codebase changes.
  */
 
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import type { MatchState } from "../game/types";
@@ -45,7 +46,10 @@ export class FileMatchStore implements MatchStore {
   /** Write-then-rename so a crash mid-write cannot corrupt a live match. */
   async save(state: MatchState): Promise<void> {
     const target = this.file(state.matchId);
-    const temp = `${target}.tmp`;
+    // Unique per write: two saves racing on one record would otherwise
+    // share a temp path, and whichever renamed second would find it
+    // already gone and throw ENOENT.
+    const temp = `${target}.${crypto.randomUUID()}.tmp`;
     await fs.promises.writeFile(temp, JSON.stringify(state), "utf8");
     await fs.promises.rename(temp, target);
   }
@@ -56,6 +60,8 @@ export class FileMatchStore implements MatchStore {
 
   async listActive(): Promise<string[]> {
     const files = await fs.promises.readdir(this.dir).catch(() => [] as string[]);
-    return files.filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, ""));
+    return files
+      .filter((f) => f.endsWith(".json") && !f.includes(".tmp"))
+      .map((f) => f.replace(/\.json$/, ""));
   }
 }

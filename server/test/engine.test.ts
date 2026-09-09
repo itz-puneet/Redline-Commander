@@ -457,3 +457,40 @@ test("reference duel into forest cover, for the client's forecast", () => {
   assert.ok(hit.damage >= low && hit.damage <= high,
     `damage ${hit.damage} outside ${low}..${high}`);
 });
+
+/* ------------------------------------------------------------------ */
+/* Storage under concurrency                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Two saves for one match can be in flight at once - a player rejoining
+ * while another disconnects. They used to share a temp filename, so the
+ * slower rename found it already gone and threw ENOENT, which as an
+ * unhandled rejection took the whole server down.
+ */
+test("concurrent saves of one match do not collide", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const nodePath = await import("node:path");
+  const { FileMatchStore } = await import("../src/match/MatchStore");
+
+  const dir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "redline-store-"));
+  const store = new FileMatchStore(dir);
+  const state = startedMatch();
+
+  const writes = [];
+  for (let i = 0; i < 25; i++) {
+    const version = structuredClone(state);
+    version.version = i;
+    writes.push(store.save(version));
+  }
+  await Promise.all(writes);
+
+  const loaded = await store.load(state.matchId);
+  assert.ok(loaded, "the match must still be readable after concurrent writes");
+  assert.equal(typeof loaded.version, "number");
+
+  // No temp files left behind, and the match is not listed twice.
+  const listed = await store.listActive();
+  assert.deepEqual(listed, [state.matchId], `listed ${JSON.stringify(listed)}`);
+});

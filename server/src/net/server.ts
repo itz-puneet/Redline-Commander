@@ -10,6 +10,7 @@ import { decode, encode, PROTOCOL_VERSION, type ServerMessage } from "./protocol
 import type { MatchService, Delivery } from "../match/MatchService";
 import type { AuthService } from "../auth/AuthService";
 import { judgeConnection, type TlsSettings } from "./tls";
+import type { RateLimiter } from "./rate_limit";
 
 const SERVER_VERSION = "0.2.0";
 const HEARTBEAT_MS = 30_000;
@@ -21,6 +22,10 @@ interface Session {
   alive: boolean;
   /** A connection gets a couple of tries before it is shown the door. */
   authAttempts: number;
+  /** The address this socket came from, for releasing its slot on close. */
+  address: string;
+  /** Refused messages so far; enough of them and the socket is closed. */
+  rateViolations: number;
   /**
    * Messages from one connection are handled strictly in order.
    *
@@ -38,6 +43,9 @@ interface Session {
 const CLOSE_REPLACED = 4000;
 const CLOSE_AUTH_FAILED = 4001;
 const CLOSE_INSECURE = 4002;
+const CLOSE_RATE_LIMITED = 4003;
+/** How often idle rate-limit keys are swept. */
+const SWEEP_MS = 60_000;
 const MAX_AUTH_ATTEMPTS = 3;
 
 export function attachGameServer(
@@ -45,8 +53,15 @@ export function attachGameServer(
   matches: MatchService,
   auth: AuthService,
   tls: TlsSettings,
+  limiter: RateLimiter,
 ): WebSocketServer {
-  const wss = new WebSocketServer({ server: httpServer, path: "/play" });
+  const wss = new WebSocketServer({
+    server: httpServer,
+    path: "/play",
+    // An oversized frame is a memory attack that should never be buffered,
+    // let alone parsed. Actions are a few hundred bytes at most.
+    maxPayload: limiter.settings.maxPayloadBytes,
+  });
   /** playerId -> session. One live connection per player; a second login
    *  displaces the first rather than duplicating a seat. */
   const sessions = new Map<string, Session>();
@@ -68,7 +83,20 @@ export function attachGameServer(
     }
   }
 
+  // A server-level error must not take the process down either.
+  wss.on("error", (err) => console.error("[net] websocket server error", err));
+
   wss.on("connection", (socket, request) => {
+    // FIRST, before anything can go wrong: `ws` emits 'error' on the socket
+    // for protocol violations - an oversized frame, a malformed opcode - and
+    // an 'error' event with no listener is fatal to the Node process. Without
+    // this, maxPayload below is not a protection but a one-packet remote kill
+    // switch. `ws` closes the socket itself afterwards; this only has to stop
+    // the throw and say what happened.
+    socket.on("error", (err) => {
+      console.warn(`[net] dropping socket after protocol error: ${err.message}`);
+    });
+
     // Refuse before a single frame is read. The client's first message
     // carries its secret, so an insecure connection must never get far
     // enough to send one.
@@ -89,8 +117,26 @@ export function attachGameServer(
       return;
     }
 
+    // Behind a proxy every connection appears to come from loopback, so this
+    // is a bound on total load rather than a per-attacker one. Real per-client
+    // limiting there belongs in the proxy - see docs/DEPLOYMENT.md.
+    const address = request.socket.remoteAddress ?? "unknown";
+    const now = Date.now();
+
+    if (!limiter.allowNewConnection(address, now)) {
+      send(socket, { t: "error", code: "rate_limited" });
+      socket.close(CLOSE_RATE_LIMITED, "too_many_connections");
+      return;
+    }
+    if (!limiter.acquireSocket(address)) {
+      send(socket, { t: "error", code: "rate_limited" });
+      socket.close(CLOSE_RATE_LIMITED, "too_many_open_sockets");
+      return;
+    }
+
     const session: Session = {
       socket, playerId: null, matchId: null, alive: true, authAttempts: 0,
+      address, rateViolations: 0,
       queue: Promise.resolve(),
     };
 
@@ -99,7 +145,18 @@ export function attachGameServer(
     });
 
     socket.on("message", (raw) => {
-      // Queue rather than handle: see Session.queue.
+      // Metered before queueing, so a flood cannot pile up work behind the
+      // queue faster than it drains. The key is the identity once known, so
+      // opening fresh sockets does not buy a fresh allowance.
+      const key = session.playerId ?? `addr:${session.address}`;
+      if (!limiter.allowMessage(key, Date.now())) {
+        session.rateViolations += 1;
+        send(socket, { t: "error", code: "rate_limited" });
+        if (session.rateViolations >= limiter.settings.maxMessageViolations) {
+          socket.close(CLOSE_RATE_LIMITED, "too_many_messages");
+        }
+        return;
+      }
       session.queue = session.queue.then(() => handleMessage(raw.toString()));
     });
 
@@ -146,6 +203,11 @@ export function attachGameServer(
           }
 
           case "createMatch": {
+            // Each match is a file on disk, so creation gets its own budget
+            // separate from the general message rate.
+            if (!limiter.allowMatchCreation(session.playerId!, Date.now())) {
+              return send(socket, { t: "error", code: "rate_limited" });
+            }
             const result = await matches.create(session.playerId!, message.mapId, message.faction);
             if (!result.ok) return send(socket, { t: "error", code: result.reason! });
             session.matchId = result.matchId!;
@@ -189,15 +251,26 @@ export function attachGameServer(
       }
     }
 
-    socket.on("close", async () => {
+    socket.on("close", () => {
+      limiter.releaseSocket(session.address);
       if (!session.playerId) return;
       if (sessions.get(session.playerId) === session) sessions.delete(session.playerId);
-      if (session.matchId) {
-        // Disconnecting never forfeits: the match is persisted and waiting.
-        await matches.setConnected(session.playerId, session.matchId, false);
-      }
+      if (!session.matchId) return;
+
+      // Disconnecting never forfeits: the match is persisted and waiting.
+      // Errors are caught here rather than left to reject - an async event
+      // listener that throws becomes an unhandled rejection, and one of those
+      // takes down a server full of live matches.
+      matches
+        .setConnected(session.playerId, session.matchId, false)
+        .catch((err) => console.error("[net] failed to record disconnect", err));
     });
   });
+
+  // Idle rate-limit keys are swept so a long-running server does not hold a
+  // bucket for every address that ever connected.
+  const sweeper = setInterval(() => limiter.sweep(Date.now()), SWEEP_MS);
+  sweeper.unref?.();
 
   // Drop half-open connections so a player's seat is not held by a dead socket.
   const heartbeat = setInterval(() => {
@@ -211,7 +284,10 @@ export function attachGameServer(
       socket.ping();
     }
   }, HEARTBEAT_MS);
-  wss.on("close", () => clearInterval(heartbeat));
+  wss.on("close", () => {
+    clearInterval(heartbeat);
+    clearInterval(sweeper);
+  });
 
   return wss;
 }

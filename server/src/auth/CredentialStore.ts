@@ -10,6 +10,7 @@
  * and never logged.
  */
 
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { PLAYER_ID_PATTERN, type Credential } from "./tokens";
@@ -46,13 +47,16 @@ export class FileCredentialStore implements CredentialStore {
   /** Write-then-rename, so a crash mid-write cannot corrupt a credential. */
   async save(credential: Credential): Promise<void> {
     const target = this.file(credential.playerId);
-    const temp = `${target}.tmp`;
+    // Unique per write: two saves racing on one record would otherwise
+    // share a temp path, and whichever renamed second would find it
+    // already gone and throw ENOENT.
+    const temp = `${target}.${crypto.randomUUID()}.tmp`;
     await fs.promises.writeFile(temp, JSON.stringify(credential), { encoding: "utf8", mode: 0o600 });
     await fs.promises.rename(temp, target);
   }
 
   async count(): Promise<number> {
     const files = await fs.promises.readdir(this.dir).catch(() => [] as string[]);
-    return files.filter((f) => f.endsWith(".json")).length;
+    return files.filter((f) => f.endsWith(".json") && !f.includes(".tmp")).length;
   }
 }

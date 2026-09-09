@@ -94,6 +94,32 @@ const send = (ws, message) => ws.send(JSON.stringify(message));
   impatient.close();
   await wait(100);
 
+  // Rate limiting, on an identity of its own so the flood does not spend the
+  // match players' allowance. The checks that follow all passing is itself
+  // the evidence that ordinary play stays well under the limit.
+  const flooder = await open("smoke-flood");
+  await wait(200);
+  check("the flooder is welcomed first", last(flooder, "welcome") !== undefined, true);
+  for (let i = 0; i < 200; i += 1) {
+    flooder.send(JSON.stringify({ t: "ping" }));
+  }
+  await wait(400);
+  const limited = flooder.inbox.filter((m) => m.t === "error" && m.code === "rate_limited");
+  const pongs = flooder.inbox.filter((m) => m.t === "pong");
+  check("a flood is rate limited", limited.length > 0, true);
+  check("but the first messages still got through", pongs.length > 0, true);
+  check("and most of the flood did not", pongs.length < 100, true);
+  flooder.close();
+  await wait(100);
+
+  // An oversized frame is refused by the transport before it is ever parsed.
+  const fat = await open("smoke-fatframe");
+  await wait(200);
+  const closed = new Promise((resolve) => fat.on("close", (code) => resolve(code)));
+  fat.send(JSON.stringify({ t: "ping", padding: "x".repeat(200_000) }));
+  const closeCode = await Promise.race([closed, wait(1500).then(() => "never closed")]);
+  check("an oversized frame closes the connection", closeCode, 1009);
+
   const a = await open("smoke-alice");
   const b = await open("smoke-bob");
   await wait(200);

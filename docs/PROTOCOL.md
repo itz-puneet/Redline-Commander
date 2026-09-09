@@ -98,6 +98,20 @@ Built per player by `server/src/game/view.ts`:
 Events are filtered too: a player is not told an enemy moved somewhere they
 cannot see. Turn changes, captures, builds, defeats and match end are public.
 
+## Rate limiting
+
+The server meters messages per player, connections per address, and match
+creation. Exceeding a limit returns `error: rate_limited`; the message is
+dropped, not queued. Persistent flooding closes the connection with code
+`4003`, and a client that sees it should back off rather than reconnect
+immediately.
+
+Frames larger than 64 KiB are refused by the transport and close the
+connection with the standard code `1009`.
+
+Ordinary play is nowhere near these limits — see `docs/DEPLOYMENT.md` for the
+numbers and how to tune them.
+
 ## Rejection reasons
 
 Stable string codes, safe to switch on and to show the player:
@@ -137,4 +151,5 @@ code `4000`), so a seat is never held twice.
   in `server/.state/credentials/`, which is gitignored.
 - The server never trusts client-supplied costs, damage, visibility or
   legality. Any new action type must be validated the same way.
-- Rate limiting per connection is still outstanding (`docs/ROADMAP.md`).
+- Rate limiting is on by default; behind a proxy, add per-client limits
+  there too, since every connection appears to come from loopback.

@@ -20,6 +20,7 @@ import {
   terminatesTls,
   tlsConfigError,
 } from "./net/tls";
+import { RateLimiter, readRateLimits } from "./net/rate_limit";
 
 const port = Number(process.env.PORT ?? 2567);
 // Durable server state: matches in progress and device credentials. Named
@@ -30,6 +31,22 @@ const port = Number(process.env.PORT ?? 2567);
 // Relative to the working directory (i.e. server/) rather than __dirname, so
 // it lands in the same place whether running from src/ or build/.
 const stateDir = process.env.REDLINE_STATE_DIR ?? path.resolve(process.cwd(), ".state");
+
+/**
+ * A server full of live matches should not disappear because one promise
+ * rejected in a corner. These are still bugs and are logged as such - but a
+ * rejection is usually recoverable, so it is survived, while an uncaught
+ * exception may have left state inconsistent and is not: the process exits
+ * and a supervisor restarts it. That is cheap here because every committed
+ * turn is already on disk.
+ */
+process.on("unhandledRejection", (reason) => {
+  console.error("[server] unhandled rejection (this is a bug, continuing)", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[server] uncaught exception (this is a bug, exiting)", err);
+  process.exit(1);
+});
 
 const tls = readTlsSettings();
 const configError = tlsConfigError(tls);
@@ -54,12 +71,14 @@ const httpServer = terminatesTls(tls)
   : http.createServer(app);
 const matches = new MatchService(new FileMatchStore(path.join(stateDir, "matches")));
 const auth = new AuthService(new FileCredentialStore(path.join(stateDir, "credentials")));
-attachGameServer(httpServer, matches, auth, tls);
+const limiter = new RateLimiter(readRateLimits());
+attachGameServer(httpServer, matches, auth, tls, limiter);
 
 httpServer.listen(port, () => {
   const scheme = terminatesTls(tls) ? "wss" : "ws";
   console.log(`Redline Commander server listening on ${scheme}://localhost:${port}/play`);
   console.log(`Transport: ${describePosture(tls)}`);
+  console.log(`Rate limits: ${limiter.describe()}`);
   if (tls.allowInsecure) {
     console.warn("WARNING: REDLINE_ALLOW_INSECURE is set. Device secrets travel in "
       + "cleartext and anyone on the network path can steal them.");

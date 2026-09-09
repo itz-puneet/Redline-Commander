@@ -34,6 +34,13 @@ function newId(bytes = 6): string {
 
 export class MatchService {
   private readonly cache = new Map<string, MatchState>();
+  /**
+   * One write chain per match. Two commits for the same match can be in
+   * flight at once - a player rejoining while another disconnects, say - and
+   * without this they race, with the slower write landing last and undoing
+   * the newer state.
+   */
+  private readonly writes = new Map<string, Promise<void>>();
 
   constructor(private readonly store: MatchStore) {}
 
@@ -47,7 +54,19 @@ export class MatchService {
 
   private async commit(state: MatchState): Promise<void> {
     this.cache.set(state.matchId, state);
-    await this.store.save(state);
+
+    const previous = this.writes.get(state.matchId) ?? Promise.resolve();
+    const write = previous
+      .catch(() => undefined)
+      .then(() => this.store.save(state));
+    this.writes.set(state.matchId, write);
+
+    try {
+      await write;
+    } finally {
+      // Only the last writer clears the chain, so a queue behind us survives.
+      if (this.writes.get(state.matchId) === write) this.writes.delete(state.matchId);
+    }
   }
 
   /** Fan the same authoritative state out as one fog-filtered payload each. */

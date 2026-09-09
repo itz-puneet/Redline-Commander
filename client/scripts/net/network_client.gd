@@ -36,6 +36,7 @@ const FATAL_ERROR_CODES := [
 const CLOSE_REPLACED := 4000
 const CLOSE_AUTH_FAILED := 4001
 const CLOSE_INSECURE := 4002
+const CLOSE_RATE_LIMITED := 4003
 
 var server_url: String = "ws://localhost:2567/play"
 var current_match_id: String = ""
@@ -125,6 +126,10 @@ func _process(delta: float) -> void:
 			replaced_by_other_device.emit()
 		elif close_code == CLOSE_AUTH_FAILED or close_code == CLOSE_INSECURE:
 			_want_connection = false
+		elif close_code == CLOSE_RATE_LIMITED:
+			# Reconnecting straight into a limit only deepens it. Skip to the
+			# far end of the backoff rather than hammering.
+			_reconnect_attempt = RECONNECT_DELAYS.size() - 1
 
 		if _want_connection:
 			_schedule_reconnect()

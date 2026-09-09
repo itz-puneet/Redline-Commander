@@ -34,7 +34,7 @@ protocol.
 - [x] Headless client boot check (`godot --headless res://tests/boot_check.tscn`)
 - [x] **Authenticate `token`** — trust on first use, salted hashes, see
       `server/src/auth` and the Authentication section of `docs/PROTOCOL.md`
-- [ ] Rate limiting per connection (put it in the proxy meanwhile)
+- [x] Rate limiting — messages, connections, match creation and frame size
 
 ## Phase 3 — Make it playable ✅
 - [x] Project imports cleanly in Godot 4.3 and all scripts compile

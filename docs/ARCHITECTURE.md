@@ -107,6 +107,12 @@ carries its secret. The policy is a pure function of the connection's facts
 and the configured settings, so it is tested directly rather than by standing
 up servers with certificates. `docs/DEPLOYMENT.md` has the deployment shapes.
 
+`net/rate_limit.ts` meters messages, connections and match creation. Its own
+memory is the subtle part: a limiter keyed by address is itself an attack
+surface, so the registries are bounded, sweep idle keys, and fail closed when
+full rather than growing. Clock-injected and pure, so behaviour over time is
+tested without sleeping.
+
 Messages from one connection are chained onto a per-session promise so they
 are handled in order. `ws` calls the handler again as soon as the previous
 call *returns*, not when its promise settles — so the moment any handler
