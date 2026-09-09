@@ -69,7 +69,21 @@ layout of the code, so keep them that way.
    going red. Anything the player is shown and then charged or dealt
    differently is a bug they notice immediately.
 
-5. **A match is a persisted record, not a live connection.** Players drop,
+5. **Credentials are secrets, and ids are not to be trusted.** The device
+   token is never stored, logged, or committed - only a salted hash, in
+   gitignored `server/.state/`. Any id that becomes part of a filename is
+   validated against a whitelist pattern rather than escaped, so path
+   traversal is refused at the door. Never add a log line, error message, or
+   test fixture that carries a real token.
+
+6. **The adopted state is the truth; animation is decoration.** The board
+   is not re-rendered until an event animation finishes - that is what
+   leaves the old unit positions on screen to animate away from. Every
+   sequence ends in a render of the server's state, so a dropped frame or an
+   abandoned tween cannot leave the board wrong. Never animate *instead* of
+   rendering.
+
+7. **A match is a persisted record, not a live connection.** Players drop,
    background the app, and take their turn hours later. Committed turns are
    written through `MatchStore` before being acknowledged, and a seat is keyed
    to a stable `playerId`, never a socket id.
@@ -80,9 +94,11 @@ Playable end to end: connect, create or join a match by code, and fight it
 out - board, fog, touch input, animated moves and combat, production, and a HUD
 with a damage forecast, all validated by the server and verified against a
 real one by `tools/live-check.sh`. Still
-missing before it is a game: art, more maps, and a campaign. Token
-verification is still outstanding and blocks any public deployment. See
-`docs/ROADMAP.md`.
+missing before it is a game: art, more maps, and a campaign.
+
+Devices authenticate on connect (trust on first use, see `server/src/auth`).
+A public deployment still needs TLS - `wss://` - because the device secret
+travels in the `hello` frame. See `docs/ROADMAP.md`.
 
 ## Where to start
 

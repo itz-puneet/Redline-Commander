@@ -6,9 +6,15 @@ extends Node
 ## a match were keyed to the connection, closing the app would lose the match.
 ## The server keys seats to this id, so reconnecting resumes the same seat.
 ##
-## TODO(auth): `token` is a local placeholder. Before the server is exposed
-## publicly, back this with a real account or a signed device credential -
-## as it stands anyone who learns an id can claim that seat.
+## The server records a hash of `token` the first time it sees `player_id`,
+## and checks it on every connection after that (see server/src/auth). So
+## this file IS the credential: losing it means losing the identity, and
+## anyone who copies it can take the seat. It is written to user://, which is
+## app-private storage on Android.
+##
+## There is no recovery if it is lost - clearing app data means starting as a
+## new player, and any match the old identity was in becomes unreachable.
+## That is a deliberate v1 trade: no accounts, no email, no password reset.
 
 const IDENTITY_PATH := "user://identity.json"
 
@@ -21,6 +27,14 @@ func _ready() -> void:
 	if not _load():
 		_create()
 		_save()
+
+
+## Abandon this identity and generate a new one. The only way out when the
+## server refuses these credentials - if another device registered this id
+## first, no amount of retrying will help.
+func reset() -> void:
+	_create()
+	_save()
 
 
 func _load() -> bool:

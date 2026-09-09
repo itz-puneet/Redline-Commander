@@ -18,6 +18,9 @@ const MATCH_SCENE := preload("res://scenes/match.tscn")
 
 const DEFAULT_SERVER_URL := "ws://localhost:2567/play"
 
+## Refusals about who this device is, rather than what it asked for.
+const AUTH_ERROR_CODES := ["auth_failed", "invalid_player_id", "invalid_token"]
+
 @onready var _screens: Node = $Screens
 
 var _lobby: Control = null
@@ -32,6 +35,7 @@ func _ready() -> void:
 	Net.state_received.connect(_on_view)
 	Net.update_received.connect(func(_events: Array, view: Dictionary): _on_view(view))
 	Net.server_error.connect(_on_server_error)
+	Net.replaced_by_other_device.connect(_on_replaced)
 
 	show_lobby()
 	Net.connect_to_server(_server_url())
@@ -62,6 +66,7 @@ func show_lobby() -> void:
 		_lobby.join_requested.connect(_on_join_requested)
 		_lobby.rejoin_requested.connect(_on_rejoin_requested)
 		_lobby.reconnect_requested.connect(_on_reconnect_requested)
+		_lobby.reset_identity_requested.connect(_on_reset_identity_requested)
 		_lobby.set_server_url(_server_url())
 		_lobby.set_connected(Net.is_connected_to_server())
 
@@ -111,13 +116,35 @@ func _on_reconnect_requested(server_url: String) -> void:
 	Net.connect_to_server(server_url)
 
 
+## The last resort when the server will not accept this device: throw the
+## credentials away and come back as somebody new. Any match the old identity
+## was in is gone with it, which is why this is only ever offered, never done
+## automatically.
+func _on_reset_identity_requested() -> void:
+	PlayerIdentity.reset()
+	Session.forget_match()
+	if _lobby != null:
+		_lobby.show_message("New identity created. Reconnecting...")
+	Net.connect_to_server(_server_url())
+
+
 ## --- network -----------------------------------------------------------
 
 func _on_connected() -> void:
 	if _lobby != null:
 		_lobby.set_busy(false)
 		_lobby.set_connected(true)
+		_lobby.offer_identity_reset(false)
 		_lobby.show_message("")
+
+
+func _on_replaced() -> void:
+	show_lobby()
+	if _lobby != null:
+		_lobby.set_busy(false)
+		_lobby.set_connected(false)
+		_lobby.show_message(
+			"Signed in on another device. Only one at a time can hold a seat.", true)
 
 
 func _on_disconnected() -> void:
@@ -164,6 +191,11 @@ func _on_server_error(code: String, detail: String) -> void:
 	if code == "no_such_match" or code == "not_in_this_match":
 		Session.forget_match()
 
+	# The server has refused this device's credentials, and no amount of
+	# retrying will change that - offer the one thing that can.
+	if AUTH_ERROR_CODES.has(code):
+		_lobby.offer_identity_reset(true)
+
 	_lobby.set_busy(false)
 	_lobby.set_connected(Net.is_connected_to_server())
 	_lobby.show_message(_explain(code, detail), true)
@@ -179,5 +211,8 @@ func _explain(code: String, detail: String) -> String:
 		"not_in_this_match": return "You are not a player in that match."
 		"unknown_faction": return "Pick a faction first."
 		"not_authenticated": return "The server did not accept this device."
+		"auth_failed": return "This device's credentials were refused. Another device may have registered the same identity."
+		"invalid_player_id": return "This device's identity is malformed."
+		"invalid_token": return "This device's credentials are malformed."
 		"protocol_mismatch": return "Client and server versions do not match. %s" % detail
 		_: return detail if not detail.is_empty() else code.replace("_", " ")

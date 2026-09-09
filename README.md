@@ -58,6 +58,7 @@ redline-commander/
 │       └── turn_controller.gd        # sends one action, waits, adopts result
 └── server/
     ├── src/
+    │   ├── auth/               # Device credentials, trust on first use
     │   ├── game/               # PURE rules engine - no I/O, no randomness
     │   ├── match/              # Match lifecycle + persistence
     │   ├── net/                # WebSocket transport + protocol types
@@ -139,9 +140,12 @@ shows what the exchange would cost you, the second commits.
 Missing before it is a game: art, more maps, and a campaign. See
 `docs/ROADMAP.md`.
 
-**Do not expose the server publicly yet.** Client tokens are not verified, so
-a client can currently claim any player id (`TODO(auth)` in
-`server/src/net/server.ts`).
+Devices authenticate on connect: the first connection to use an identity
+registers it, and later ones must present the same secret (`server/src/auth`).
+
+**Put TLS in front of it before exposing it beyond a trusted network.** The
+device secret travels in the `hello` frame, so over plain `ws://` anyone on
+the path can read it and become that player.
 
 ## A note on originality
 

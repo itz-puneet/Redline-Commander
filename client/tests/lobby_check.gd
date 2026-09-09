@@ -175,6 +175,50 @@ func _check_routing() -> void:
 	await get_tree().process_frame
 
 	await _check_stale_rejoin_cleared()
+	await _check_auth_failure()
+
+
+## The server refusing this device is the one failure retrying cannot fix,
+## so the lobby has to offer a way out of it.
+func _check_auth_failure() -> void:
+	Session.forget_match()
+	var app: App = MAIN_SCENE.instantiate()
+	add_child(app)
+	await get_tree().process_frame
+
+	var lobby: Control = app.get_node("Screens").get_child(0)
+	var reset: Button = lobby.get_node("Center/Panel/Margin/Column/ResetIdentity")
+	var message: Label = lobby.get_node("Center/Panel/Margin/Column/Message")
+	_check("no identity reset is offered by default", not reset.visible)
+
+	Net.server_error.emit("no_such_match", "")
+	await get_tree().process_frame
+	_check("an ordinary error does not offer one either", not reset.visible)
+
+	var before := PlayerIdentity.player_id
+	Net.server_error.emit("auth_failed", "")
+	await get_tree().process_frame
+	_check("a refused identity offers a reset", reset.visible)
+	_check("and says so in plain words",
+		message.text.to_lower().contains("credentials"), "got '%s'" % message.text)
+	_check("without resetting anything on its own", PlayerIdentity.player_id == before)
+
+	reset.pressed.emit()
+	await get_tree().process_frame
+	_check("pressing it issues a new identity", PlayerIdentity.player_id != before)
+	_check("with a new secret too", not PlayerIdentity.token.is_empty())
+	_check("and stops offering the reset", not reset.visible)
+
+	# Being displaced by another device is a different story with the same
+	# shape: stop, explain, do not silently fight over the seat.
+	Net.replaced_by_other_device.emit()
+	await get_tree().process_frame
+	_check("being replaced returns to the lobby", app.current_screen() == "lobby")
+	_check("and explains why", message.text.to_lower().contains("another device"),
+		"got '%s'" % message.text)
+
+	app.queue_free()
+	await get_tree().process_frame
 
 
 ## A remembered match the server has forgotten must stop being offered.

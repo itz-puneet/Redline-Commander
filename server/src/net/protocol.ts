@@ -15,8 +15,10 @@ import type { PlayerView } from "../game/view";
 /* ---------------------------- client -> server --------------------- */
 
 export type ClientMessage =
-  /** First message on every connection. Identity is the device's own key
-   *  pair-less token, NOT the socket id, so a reconnect resumes the seat. */
+  /** First message on every connection. The device's own id and secret,
+   *  NOT the socket id, so a reconnect resumes the seat. The first
+   *  connection to use an id registers it; later ones must present the same
+   *  secret (see server/src/auth). */
   | { t: "hello"; playerId: string; token: string; clientVersion: string }
   | { t: "createMatch"; mapId: string; faction: string }
   | { t: "joinMatch"; matchId: string; faction: string }

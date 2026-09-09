@@ -46,7 +46,7 @@ cd "$repo_root/server"
 npm run build --silent
 
 echo "== starting server =="
-REDLINE_MATCH_DIR="$work_dir/matches" node build/src/index.js > "$work_dir/server.log" 2>&1 &
+REDLINE_STATE_DIR="$work_dir/state" node build/src/index.js > "$work_dir/server.log" 2>&1 &
 server_pid=$!
 
 for _ in $(seq 1 40); do

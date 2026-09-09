@@ -61,6 +61,24 @@ Combat randomness is seeded from match state, so a saved match replays
 identically, a reconnecting client resyncs exactly, and a modified client
 cannot reroll an unlucky hit.
 
+### `auth/` — who is connecting
+
+Trust on first use: the first connection to claim a player id registers it
+with a salted hash of its secret, and every later connection must present the
+same one. `tokens.ts` holds the hashing and the validation, `CredentialStore`
+persists it behind the same three-method interface as `MatchStore`, and
+`AuthService` is the register-or-verify decision.
+
+It authenticates a *device*, not a person — no accounts, no email, no
+password reset, which is the right trade for a game played with friends. The
+cost is that losing the device loses the identity. `docs/PROTOCOL.md` has the
+rules and the failure codes.
+
+Deliberately a plain salted SHA-256 rather than scrypt or argon2: the secret
+is 256 bits of machine-generated randomness, and slow KDFs exist to make
+guessing *low-entropy* human-chosen secrets expensive. That module must not
+be reused for passwords.
+
 ### `match/` — lifecycle and persistence
 
 `MatchService` is the seam between transport and rules. It holds the live
@@ -81,6 +99,12 @@ it; nothing else changes.
 
 A thin `ws` server. Parses a frame, calls `MatchService`, writes the results
 back. It contains no game rules at all.
+
+Messages from one connection are chained onto a per-session promise so they
+are handled in order. `ws` calls the handler again as soon as the previous
+call *returns*, not when its promise settles — so the moment any handler
+awaits, as authentication does, a later message can overtake an earlier one.
+Clients legitimately send `hello` and then immediately `rejoinMatch`.
 
 ## Client (Godot 4 / GDScript)
 

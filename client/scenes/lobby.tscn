@@ -104,6 +104,11 @@ text = "Join match"
 custom_minimum_size = Vector2(0, 48)
 text = "Rejoin match"
 
+[node name="ResetIdentity" type="Button" parent="Center/Panel/Margin/Column"]
+visible = false
+custom_minimum_size = Vector2(0, 44)
+text = "Reset this device's identity"
+
 [node name="Message" type="Label" parent="Center/Panel/Margin/Column"]
 custom_minimum_size = Vector2(0, 44)
 autowrap_mode = 2

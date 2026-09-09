@@ -12,7 +12,7 @@ confusing ways later.
 
 | `t` | Fields | Notes |
 |---|---|---|
-| `hello` | `playerId`, `token`, `clientVersion` | Must be first. `playerId` is persistent per install, **not** the socket id. |
+| `hello` | `playerId`, `token`, `clientVersion` | Must be first, and must succeed. `playerId` is persistent per install, **not** the socket id; `token` is that install's secret. |
 | `createMatch` | `mapId`, `faction` | Replies `matchCreated` with a join code. |
 | `joinMatch` | `matchId`, `faction` | Fills the second seat and starts the match. |
 | `rejoinMatch` | `matchId` | Resume an existing seat after a disconnect. |
@@ -21,6 +21,38 @@ confusing ways later.
 
 Anything other than `hello` before identity is established is refused with
 `error: not_authenticated`.
+
+Messages from one connection are handled strictly in order, so a client may
+send `hello` and a follow-up in the same tick without the second overtaking
+the first while authentication is in flight.
+
+## Authentication
+
+Trust on first use. The first connection to present a given `playerId`
+registers it, and the server stores a salted hash of the accompanying
+`token`; every later connection with that id must present the same token.
+
+- `playerId` must match `[A-Za-z0-9_-]{8,64}` — it becomes part of a
+  filename, so the character set is restricted rather than escaped.
+- `token` must be 16–256 characters. The real client generates 32 random
+  bytes (64 hex) on first launch.
+- Three failed attempts on one connection closes it with code `4001`.
+- A second connection authenticating as an id that is already online
+  displaces the first, which is closed with code `4000`. Clients must not
+  reconnect after either code: one will be refused again, and the other
+  would have two devices fighting over the seat.
+
+Failures are `error` frames with `invalid_player_id`, `invalid_token`, or
+`auth_failed`. `auth_failed` is used for any wrong secret on a registered id,
+and carries no detail — a rejection must not become a way to enumerate who
+exists.
+
+**This authenticates a device, not a person.** Losing the device or clearing
+app data means losing the identity, and any match it was in; there is no
+recovery, by design. The remaining hole is that whoever claims an
+unregistered id first owns it — not a practical attack against 128 bits of
+client-generated randomness, but the reason a large public deployment
+eventually wants real accounts.
 
 ## Actions
 
@@ -97,9 +129,12 @@ code `4000`), so a seat is never held twice.
 
 ## Security notes
 
-- `token` is **not yet verified**. Until it is, a client can claim any
-  `playerId`. Do not expose the server publicly before implementing this —
-  see the `TODO(auth)` in `server/src/net/server.ts`.
-- Deploy behind TLS (`wss://`) in production.
+- **Deploy behind TLS (`wss://`).** The device secret travels in the `hello`
+  frame, so over plain `ws://` anyone on the path can read it and then be
+  that player. This is the one remaining requirement before exposing the
+  server beyond a trusted network.
+- Tokens are never stored, logged, or returned — only a salted hash is kept,
+  in `server/.state/credentials/`, which is gitignored.
 - The server never trusts client-supplied costs, damage, visibility or
   legality. Any new action type must be validated the same way.
+- Rate limiting per connection is still outstanding (`docs/ROADMAP.md`).

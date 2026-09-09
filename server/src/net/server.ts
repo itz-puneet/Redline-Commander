@@ -8,6 +8,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { Server as HttpServer } from "http";
 import { decode, encode, PROTOCOL_VERSION, type ServerMessage } from "./protocol";
 import type { MatchService, Delivery } from "../match/MatchService";
+import type { AuthService } from "../auth/AuthService";
 
 const SERVER_VERSION = "0.2.0";
 const HEARTBEAT_MS = 30_000;
@@ -17,9 +18,31 @@ interface Session {
   playerId: string | null;
   matchId: string | null;
   alive: boolean;
+  /** A connection gets a couple of tries before it is shown the door. */
+  authAttempts: number;
+  /**
+   * Messages from one connection are handled strictly in order.
+   *
+   * `ws` calls the message handler again as soon as the previous call
+   * *returns*, not when its promise settles - so the moment any handler
+   * awaits (authentication, a store write), a later message can overtake an
+   * earlier one. Clients legitimately send `hello` and then immediately
+   * `rejoinMatch`, which would race and be rejected as unauthenticated.
+   * Chaining onto this promise restores the ordering the protocol assumes.
+   */
+  queue: Promise<void>;
 }
 
-export function attachGameServer(httpServer: HttpServer, matches: MatchService): WebSocketServer {
+/** Close codes, so the client can tell "wrong secret" from "network died". */
+const CLOSE_REPLACED = 4000;
+const CLOSE_AUTH_FAILED = 4001;
+const MAX_AUTH_ATTEMPTS = 3;
+
+export function attachGameServer(
+  httpServer: HttpServer,
+  matches: MatchService,
+  auth: AuthService,
+): WebSocketServer {
   const wss = new WebSocketServer({ server: httpServer, path: "/play" });
   /** playerId -> session. One live connection per player; a second login
    *  displaces the first rather than duplicating a seat. */
@@ -43,14 +66,22 @@ export function attachGameServer(httpServer: HttpServer, matches: MatchService):
   }
 
   wss.on("connection", (socket) => {
-    const session: Session = { socket, playerId: null, matchId: null, alive: true };
+    const session: Session = {
+      socket, playerId: null, matchId: null, alive: true, authAttempts: 0,
+      queue: Promise.resolve(),
+    };
 
     socket.on("pong", () => {
       session.alive = true;
     });
 
-    socket.on("message", async (raw) => {
-      const message = decode(raw.toString());
+    socket.on("message", (raw) => {
+      // Queue rather than handle: see Session.queue.
+      session.queue = session.queue.then(() => handleMessage(raw.toString()));
+    });
+
+    async function handleMessage(raw: string): Promise<void> {
+      const message = decode(raw);
       if (!message) return send(socket, { t: "error", code: "malformed_message" });
 
       // Identity must be established before anything else touches a match.
@@ -61,18 +92,31 @@ export function attachGameServer(httpServer: HttpServer, matches: MatchService):
       try {
         switch (message.t) {
           case "hello": {
-            // TODO(auth): verify `token` against a real account/device record
-            // before trusting playerId. Until then a client can claim any
-            // seat, so do not run this open to the internet as-is.
-            if (!message.playerId) {
-              return send(socket, { t: "error", code: "missing_player_id" });
+            // Nothing is trusted until this passes: not the id, and not the
+            // seat it would claim. The token never reaches a log.
+            session.authAttempts += 1;
+            const result = await auth.authenticate(message.playerId, message.token);
+
+            if (!result.ok) {
+              send(socket, { t: "error", code: result.reason });
+              if (session.authAttempts >= MAX_AUTH_ATTEMPTS) {
+                socket.close(CLOSE_AUTH_FAILED, "auth_failed");
+              }
+              return;
             }
-            sessions.get(message.playerId)?.socket.close(4000, "replaced_by_new_connection");
-            session.playerId = message.playerId;
-            sessions.set(message.playerId, session);
+
+            // Only now may this connection take over the id. A second device
+            // logging in displaces the first rather than sharing the seat.
+            const previous = sessions.get(result.playerId);
+            if (previous !== undefined && previous !== session) {
+              previous.socket.close(CLOSE_REPLACED, "replaced_by_new_connection");
+            }
+            session.playerId = result.playerId;
+            sessions.set(result.playerId, session);
+
             return send(socket, {
               t: "welcome",
-              playerId: message.playerId,
+              playerId: result.playerId,
               serverVersion: SERVER_VERSION,
               protocolVersion: PROTOCOL_VERSION,
             });
@@ -120,7 +164,7 @@ export function attachGameServer(httpServer: HttpServer, matches: MatchService):
         console.error("[net] handler failed", err);
         send(socket, { t: "error", code: "internal_error" });
       }
-    });
+    }
 
     socket.on("close", async () => {
       if (!session.playerId) return;

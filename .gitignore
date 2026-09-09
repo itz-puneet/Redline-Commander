@@ -13,7 +13,9 @@ dist/
 *.log
 .env
 
-# Server runtime state (matches in progress)
+# Server runtime state: matches in progress and device credentials.
+# Credentials are secrets - never commit this directory.
+server/.state/
 server/.matches/
 
 # OS

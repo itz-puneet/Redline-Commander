@@ -32,9 +32,8 @@ protocol.
 - [x] Reconnect / resume by persistent `playerId`
 - [x] End-to-end protocol smoke test (`npm run smoke`)
 - [x] Headless client boot check (`godot --headless res://tests/boot_check.tscn`)
-- [ ] **Authenticate `token`** — currently unverified, so a client can claim
-      any seat. Blocks any public deployment. (`TODO(auth)` in
-      `server/src/net/server.ts`)
+- [x] **Authenticate `token`** — trust on first use, salted hashes, see
+      `server/src/auth` and the Authentication section of `docs/PROTOCOL.md`
 - [ ] Rate limiting per connection
 
 ## Phase 3 — Make it playable ✅
@@ -65,7 +64,10 @@ protocol.
 - [ ] Sound and music (original or properly licensed)
 - [ ] UI/UX pass, animations, damage popups
 - [ ] Push notifications for "it's your turn"
-- [ ] Server deployment behind TLS (`wss://`), Postgres-backed `MatchStore`
+- [ ] Server deployment behind TLS (`wss://`) — **required before exposing
+      the server**, since the device secret travels in the `hello` frame
+- [ ] Postgres-backed `MatchStore` and `CredentialStore`
+- [ ] Identity transfer between devices, so a reinstall does not orphan matches
 - [ ] Android signing, Play Store listing (if distributing beyond direct APKs)
 
 ## Notes

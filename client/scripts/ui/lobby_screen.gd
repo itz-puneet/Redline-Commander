@@ -11,6 +11,8 @@ signal create_requested(map_id: String, faction: String)
 signal join_requested(match_id: String, faction: String)
 signal rejoin_requested(match_id: String)
 signal reconnect_requested(server_url: String)
+## Abandon this device's identity and start again as a new player.
+signal reset_identity_requested()
 
 @onready var _status: Label = $Center/Panel/Margin/Column/Status
 @onready var _server_url: LineEdit = $Center/Panel/Margin/Column/ServerRow/ServerUrl
@@ -22,6 +24,7 @@ signal reconnect_requested(server_url: String)
 @onready var _join: Button = $Center/Panel/Margin/Column/JoinRow/Join
 @onready var _rejoin: Button = $Center/Panel/Margin/Column/Rejoin
 @onready var _message: Label = $Center/Panel/Margin/Column/Message
+@onready var _reset_identity: Button = $Center/Panel/Margin/Column/ResetIdentity
 
 var _connected := false
 var _busy := false
@@ -35,6 +38,9 @@ func _ready() -> void:
 	_create.pressed.connect(_on_create_pressed)
 	_join.pressed.connect(_on_join_pressed)
 	_rejoin.pressed.connect(_on_rejoin_pressed)
+	_reset_identity.pressed.connect(func():
+		offer_identity_reset(false)
+		reset_identity_requested.emit())
 	# Typing a code and hitting enter should just work.
 	_join_code.text_submitted.connect(func(_text: String): _on_join_pressed())
 
@@ -84,6 +90,12 @@ func set_busy(busy: bool, note: String = "") -> void:
 	if not note.is_empty():
 		_status.text = note
 	_refresh()
+
+
+## Only offered when the server has actually refused this device - it throws
+## away the identity, and with it any match that identity was in.
+func offer_identity_reset(offer: bool) -> void:
+	_reset_identity.visible = offer
 
 
 func show_message(text: String, is_error: bool = false) -> void:
@@ -150,3 +162,4 @@ func _refresh() -> void:
 	_rejoin.visible = Session.has_match()
 	if _rejoin.visible:
 		_rejoin.text = "Rejoin match %s" % Session.last_match_id
+	_reset_identity.disabled = _busy

@@ -15,6 +15,9 @@ const { WebSocket } = require("ws");
 const URL = process.env.REDLINE_URL || "ws://localhost:2567/play";
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Long enough to satisfy the server's token rules; see server/src/auth. */
+const tokenFor = (playerId) => `smoke-token-for-${playerId}-0000`;
+
 let failures = 0;
 function check(label, actual, expected) {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);
@@ -22,14 +25,14 @@ function check(label, actual, expected) {
   console.log(`${ok ? "ok  " : "FAIL"} ${label}${ok ? "" : ` (got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)})`}`);
 }
 
-function open(playerId) {
+function open(playerId, token = tokenFor(playerId)) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(URL);
     ws.inbox = [];
     ws.on("message", (data) => ws.inbox.push(JSON.parse(data.toString())));
     ws.on("error", reject);
     ws.on("open", () => {
-      ws.send(JSON.stringify({ t: "hello", playerId, token: "dev", clientVersion: "0.2.0" }));
+      ws.send(JSON.stringify({ t: "hello", playerId, token, clientVersion: "0.2.0" }));
       resolve(ws);
     });
   });
@@ -40,10 +43,62 @@ const last = (ws, t) => [...ws.inbox].reverse().find((m) => m.t === t);
 const send = (ws, message) => ws.send(JSON.stringify(message));
 
 (async () => {
+  // Auth first, on an identity of its own. A second connection claiming an
+  // id displaces the first, so probing with the match players' ids would
+  // pull the socket out from under the match being set up.
+  const first = await open("smoke-carol");
+  await wait(200);
+  check("a new device registers on first use", last(first, "welcome") !== undefined, true);
+  first.close();
+  await wait(100);
+
+  const returning = await open("smoke-carol");
+  await wait(200);
+  check("and is recognised when it comes back", last(returning, "welcome") !== undefined, true);
+  returning.close();
+  await wait(100);
+
+  const impostor = await open("smoke-carol", "wrong-token-entirely-0000");
+  await wait(200);
+  check("an impostor with the wrong secret is refused", last(impostor, "error")?.code, "auth_failed");
+  check("and is told nothing else", last(impostor, "welcome"), undefined);
+  impostor.close();
+
+  const malformed = await open("smoke-carol", "short");
+  await wait(200);
+  check("a malformed token is refused on shape", last(malformed, "error")?.code, "invalid_token");
+  malformed.close();
+
+  const traversal = await open("../../etc/passwd", tokenFor("x"));
+  await wait(200);
+  check("a path-traversal id is refused", last(traversal, "error")?.code, "invalid_player_id");
+  traversal.close();
+  await wait(100);
+
+  // Messages from one connection must be handled in order. Authenticating
+  // is async, so without an explicit queue a follow-up sent in the same tick
+  // as `hello` overtakes it and is rejected as unauthenticated.
+  const impatient = new WebSocket(URL);
+  impatient.inbox = [];
+  impatient.on("message", (data) => impatient.inbox.push(JSON.parse(data.toString())));
+  await new Promise((resolve) => impatient.on("open", resolve));
+  impatient.send(JSON.stringify({
+    t: "hello", playerId: "smoke-eager", token: tokenFor("smoke-eager"), clientVersion: "0.2.0",
+  }));
+  impatient.send(JSON.stringify({ t: "createMatch", mapId: "crossing", faction: "crimson_alliance" }));
+  await wait(250);
+  check("a message sent in the same tick as hello is not overtaken",
+    last(impatient, "error")?.code, undefined);
+  check("and is acted on once authentication finishes",
+    typeof last(impatient, "matchCreated")?.matchId, "string");
+  impatient.close();
+  await wait(100);
+
   const a = await open("smoke-alice");
   const b = await open("smoke-bob");
-  await wait(150);
-  check("both clients are welcomed", [last(a, "welcome") !== undefined, last(b, "welcome") !== undefined], [true, true]);
+  await wait(200);
+  check("both match players are welcomed",
+    [last(a, "welcome") !== undefined, last(b, "welcome") !== undefined], [true, true]);
 
   send(a, { t: "createMatch", mapId: "crossing", faction: "crimson_alliance" });
   await wait(200);

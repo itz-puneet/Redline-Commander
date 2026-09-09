@@ -20,9 +20,19 @@ signal state_received(view: Dictionary)
 signal update_received(events: Array, view: Dictionary)
 signal action_rejected(reason: String, view: Dictionary)
 signal server_error(code: String, detail: String)
+## This device was signed in somewhere else and lost the connection to it.
+signal replaced_by_other_device()
 
 const PROTOCOL_VERSION := 1
 const RECONNECT_DELAYS := [1.0, 2.0, 4.0, 8.0, 15.0]
+
+## Server errors that reconnecting cannot fix. Retrying these would spin
+## forever against a server that has already made up its mind.
+const FATAL_ERROR_CODES := ["auth_failed", "invalid_player_id", "invalid_token"]
+
+## Close codes the server uses deliberately (server/src/net/server.ts).
+const CLOSE_REPLACED := 4000
+const CLOSE_AUTH_FAILED := 4001
 
 var server_url: String = "ws://localhost:2567/play"
 var current_match_id: String = ""
@@ -81,7 +91,17 @@ func _process(delta: float) -> void:
 		while _socket.get_available_packet_count() > 0:
 			_handle_packet(_socket.get_packet().get_string_from_utf8())
 	elif state == WebSocketPeer.STATE_CLOSED and _last_state != WebSocketPeer.STATE_CLOSED:
+		var close_code := _socket.get_close_code()
 		disconnected.emit()
+
+		# Two devices reconnecting at each other would fight forever, and a
+		# rejected identity will be rejected again, so neither retries.
+		if close_code == CLOSE_REPLACED:
+			_want_connection = false
+			replaced_by_other_device.emit()
+		elif close_code == CLOSE_AUTH_FAILED:
+			_want_connection = false
+
 		if _want_connection:
 			_schedule_reconnect()
 
@@ -145,7 +165,11 @@ func _handle_packet(raw: String) -> void:
 		"actionRejected":
 			action_rejected.emit(String(message.get("reason", "unknown")), message.get("view", {}))
 		"error":
-			server_error.emit(String(message.get("code", "unknown")), String(message.get("detail", "")))
+			var code := String(message.get("code", "unknown"))
+			# Stop before the socket even closes, so no backoff timer is armed.
+			if FATAL_ERROR_CODES.has(code):
+				_want_connection = false
+			server_error.emit(code, String(message.get("detail", "")))
 		"pong":
 			pass
 		_:

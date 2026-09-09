@@ -186,9 +186,10 @@ are unchanged apart from the rename.
 
 Deliberately not addressed, and tracked in `docs/ROADMAP.md`:
 
-- **Authentication.** `token` is accepted without verification, so a client
-  can currently claim any `playerId`. This must be fixed before the server is
-  exposed publicly (`TODO(auth)` in `server/src/net/server.ts`).
+- ~~**Authentication.**~~ Done since this review was written: devices
+  authenticate on connect, trust on first use, in `server/src/auth`. TLS is
+  still required before exposing the server, since the device secret travels
+  in the `hello` frame.
 - No matchmaking beyond sharing a join code.
 - Transports (`cargo`/`carry_capacity`) are modelled in data and state but
   load/unload actions are not implemented.
