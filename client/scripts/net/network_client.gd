@@ -22,6 +22,9 @@ signal action_rejected(reason: String, view: Dictionary)
 signal server_error(code: String, detail: String)
 ## This device was signed in somewhere else and lost the connection to it.
 signal replaced_by_other_device()
+## The opponent came or went. Presence arrives on its own, not inside a view,
+## because nothing about the board changed.
+signal opponent_connection_changed(slot: int, connected: bool)
 
 const PROTOCOL_VERSION := 1
 const RECONNECT_DELAYS := [1.0, 2.0, 4.0, 8.0, 15.0]
@@ -217,6 +220,9 @@ func _handle_packet(raw: String) -> void:
 			if FATAL_ERROR_CODES.has(code):
 				_want_connection = false
 			server_error.emit(code, String(message.get("detail", "")))
+		"opponentConnection":
+			opponent_connection_changed.emit(
+				int(message.get("slot", 0)), bool(message.get("connected", false)))
 		"pong":
 			pass
 		_:

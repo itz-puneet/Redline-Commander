@@ -27,3 +27,11 @@ func refresh(state: MatchState) -> void:
 
 	_round.text = "Round %d" % state.round_number
 	_funds.text = "%d funds" % state.my_funds()
+
+	# A dropped opponent is worth saying out loud: in a game where a turn can
+	# arrive hours later, silence and absence look identical.
+	for player in state.players:
+		if int(player.get("slot", 0)) != state.you_slot \
+				and not bool(player.get("connected", true)):
+			_turn.text = "%s  (opponent offline)" % _turn.text
+			break

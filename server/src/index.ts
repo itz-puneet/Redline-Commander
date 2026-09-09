@@ -83,26 +83,36 @@ const credentialStore = new FileCredentialStore(path.join(stateDir, "credentials
 const matches = new MatchService(matchStore);
 const auth = new AuthService(credentialStore);
 
-// A crash between write and rename leaves a temp file nothing would ever
-// remove. Startup is the one moment when no write is in flight.
-void Promise.all([
-  matchStore.cleanOrphanedTempFiles(),
-  credentialStore.cleanOrphanedTempFiles(),
-]).then(([staleMatches, staleCredentials]) => {
+/**
+ * A crash between write and rename leaves a temp file nothing would ever
+ * remove. This runs to completion before the server listens, so it cannot
+ * race a save of its own; the stores additionally ignore temps young enough
+ * that another process might still own them.
+ */
+async function cleanTempFiles(): Promise<void> {
+  const [staleMatches, staleCredentials] = await Promise.all([
+    matchStore.cleanOrphanedTempFiles(),
+    credentialStore.cleanOrphanedTempFiles(),
+  ]);
   const total = staleMatches + staleCredentials;
   if (total > 0) console.log(`Cleaned ${total} orphaned temp file(s) from a previous crash`);
-}).catch((err) => console.warn("[server] could not clean temp files", err));
+}
 const limiter = new RateLimiter(readRateLimits());
 attachGameServer(httpServer, matches, auth, tls, limiter);
 
-httpServer.listen(port, () => {
-  const scheme = terminatesTls(tls) ? "wss" : "ws";
-  console.log(`Redline Commander server listening on ${scheme}://localhost:${port}/play`);
-  console.log(`Transport: ${describePosture(tls)}`);
-  console.log(`Rate limits: ${limiter.describe()}`);
-  if (tls.allowInsecure) {
-    console.warn("WARNING: REDLINE_ALLOW_INSECURE is set. Device secrets travel in "
-      + "cleartext and anyone on the network path can steal them.");
-  }
-  console.log(`State: ${stateDir}`);
-});
+// Listening only after the sweep: it must not race a save of its own.
+cleanTempFiles()
+  .catch((err) => console.warn("[server] could not clean temp files", err))
+  .finally(() => {
+  httpServer.listen(port, () => {
+    const scheme = terminatesTls(tls) ? "wss" : "ws";
+    console.log(`Redline Commander server listening on ${scheme}://localhost:${port}/play`);
+    console.log(`Transport: ${describePosture(tls)}`);
+    console.log(`Rate limits: ${limiter.describe()}`);
+    if (tls.allowInsecure) {
+      console.warn("WARNING: REDLINE_ALLOW_INSECURE is set. Device secrets travel in "
+        + "cleartext and anyone on the network path can steal them.");
+    }
+    console.log(`State: ${stateDir}`);
+  });
+  });

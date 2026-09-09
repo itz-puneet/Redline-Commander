@@ -241,6 +241,24 @@ func _check_top_bar() -> void:
 	lost["winnerSlot"] = 2
 	_controller.load_view(lost)
 	_check("and so is a loss", (_top_bar.get_node(row + "Turn") as Label).text == "Defeat")
+
+	# Presence arrives on its own message, outside any view, because nothing
+	# about the board changed. In a game where a turn can arrive hours later,
+	# an absent opponent and a thinking one look identical without this.
+	_controller.load_view(Fixtures.match_view())
+	_check("an opponent present is not remarked on",
+		not (_top_bar.get_node(row + "Turn") as Label).text.contains("offline"))
+
+	Net.opponent_connection_changed.emit(2, false)
+	await get_tree().process_frame
+	_check("a dropped opponent is shown as offline",
+		(_top_bar.get_node(row + "Turn") as Label).text.contains("offline"),
+		"got '%s'" % (_top_bar.get_node(row + "Turn") as Label).text)
+
+	Net.opponent_connection_changed.emit(2, true)
+	await get_tree().process_frame
+	_check("and cleared when they come back",
+		not (_top_bar.get_node(row + "Turn") as Label).text.contains("offline"))
 	_phases += 1
 
 

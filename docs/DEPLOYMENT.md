@@ -33,6 +33,14 @@ but only from a loopback peer, because that header is client-settable and a
 remote host claiming to be a proxy is just a remote host. Put the proxy on
 the same machine, or in front of a loopback-bound listener.
 
+**In this mode the proxy must set `X-Forwarded-Proto`.** With
+`REDLINE_TRUST_PROXY=1` a loopback peer is taken to be the proxy rather than
+a local developer, so the plain "it came from this machine" allowance no
+longer applies — a forwarded connection that does not say it was encrypted is
+refused. Without that, a proxy serving plaintext would be waved through as
+loopback, which is exactly the silent leak this is all meant to prevent. Both
+config examples below set the header.
+
 Caddy, which obtains and renews a certificate automatically:
 
 ```

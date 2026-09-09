@@ -7,7 +7,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server as HttpServer } from "http";
 import { decode, encode, PROTOCOL_VERSION, type ServerMessage } from "./protocol";
-import type { MatchService, Delivery } from "../match/MatchService";
+import type { MatchService, Delivery, PresenceChange } from "../match/MatchService";
 import type { AuthService } from "../auth/AuthService";
 import { judgeConnection, type TlsSettings } from "./tls";
 import type { RateLimiter, TokenBucket } from "./rate_limit";
@@ -95,10 +95,24 @@ export function attachGameServer(
     if (socket.readyState === WebSocket.OPEN) socket.send(encode(message));
   }
 
-  function dispatch(deliveries: Delivery[], asRejection?: string): void {
+  function announcePresence(matchId: string, change: PresenceChange): void {
+    for (const playerId of change.notify) {
+      const target = sessions.get(playerId);
+      if (!target || target.matchId !== matchId) continue;
+      send(target.socket, {
+        t: "opponentConnection", slot: change.slot, connected: change.connected,
+      });
+    }
+  }
+
+  function dispatch(matchId: string, deliveries: Delivery[], asRejection?: string): void {
     for (const delivery of deliveries) {
       const target = sessions.get(delivery.playerId);
       if (!target) continue; // Offline player: their state is persisted, they resync on rejoin.
+      // A player can be in more than one match; neither `update` nor `state`
+      // names one, so sending them a view for a match they are not looking
+      // at would have them adopt the wrong board.
+      if (target.matchId !== matchId) continue;
       send(
         target.socket,
         asRejection
@@ -263,14 +277,14 @@ export function attachGameServer(
             if (!result.ok) return send(socket, { t: "error", code: result.reason! });
             session.matchId = result.matchId!;
             send(socket, { t: "matchCreated", matchId: result.matchId!, joinCode: result.matchId! });
-            return dispatch(result.deliveries);
+            return dispatch(result.matchId!, result.deliveries);
           }
 
           case "joinMatch": {
             const result = await matches.join(session.playerId!, message.matchId, message.faction);
             if (!result.ok) return send(socket, { t: "error", code: result.reason! });
             session.matchId = message.matchId;
-            return dispatch(result.deliveries);
+            return dispatch(message.matchId, result.deliveries);
           }
 
           case "rejoinMatch": {
@@ -287,7 +301,14 @@ export function attachGameServer(
 
           case "action": {
             const result = await matches.act(session.playerId!, message.matchId, message.action);
-            return dispatch(result.deliveries, result.ok ? undefined : result.reason);
+            // A refusal that produced no deliveries - an unknown match, or one
+            // this player is not in - would otherwise say nothing at all, and
+            // the client would wait on an action that is never coming back.
+            if (!result.ok && result.deliveries.length === 0) {
+              return send(socket, { t: "error", code: result.reason ?? "action_failed" });
+            }
+            return dispatch(message.matchId, result.deliveries,
+              result.ok ? undefined : result.reason);
           }
 
           case "ping":
@@ -306,7 +327,13 @@ export function attachGameServer(
       liveSessions.delete(session);
       limiter.releaseSocket(session.address);
       if (!session.playerId) return;
-      if (sessions.get(session.playerId) === session) sessions.delete(session.playerId);
+
+      // A socket that was displaced by a reconnect is no longer this player's
+      // connection. Its close - which for a half-open socket can arrive half
+      // a minute later - must not mark the player who replaced it as away.
+      const stillCurrent = sessions.get(session.playerId) === session;
+      if (!stillCurrent) return;
+      sessions.delete(session.playerId);
       if (!session.matchId) return;
 
       // Disconnecting never forfeits: the match is persisted and waiting.
@@ -315,6 +342,9 @@ export function attachGameServer(
       // takes down a server full of live matches.
       matches
         .setConnected(session.playerId, session.matchId, false)
+        .then((change) => {
+          if (change) announcePresence(session.matchId!, change);
+        })
         .catch((err) => console.error("[net] failed to record disconnect", err));
     });
   });

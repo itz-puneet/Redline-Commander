@@ -81,12 +81,20 @@ export function judgeConnection(
 ): ConnectionVerdict {
   if (facts.encrypted) return { ok: true, reason: "tls" };
 
-  if (
-    settings.trustProxy &&
-    isLoopback(facts.remoteAddress) &&
-    facts.forwardedProto?.split(",")[0].trim().toLowerCase() === "https"
-  ) {
-    return { ok: true, reason: "forwarded_tls" };
+  // Behind a proxy, a loopback peer IS the proxy - not a developer on this
+  // machine. So in that mode the loopback allowance below must not apply: it
+  // would admit every forwarded connection regardless of what the proxy
+  // actually served, which is precisely the silent plaintext this module
+  // exists to prevent, in the deployment shape the docs recommend.
+  if (settings.trustProxy) {
+    if (
+      isLoopback(facts.remoteAddress) &&
+      facts.forwardedProto?.split(",")[0].trim().toLowerCase() === "https"
+    ) {
+      return { ok: true, reason: "forwarded_tls" };
+    }
+    if (settings.allowInsecure) return { ok: true, reason: "insecure_allowed" };
+    return { ok: false, reason: "insecure_transport" };
   }
 
   // Plain development on the same machine: nothing crosses a wire.

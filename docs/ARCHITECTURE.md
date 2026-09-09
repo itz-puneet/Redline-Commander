@@ -94,6 +94,14 @@ cache, writes each committed turn through `MatchStore` **before**
 acknowledging it, and fans one authoritative state out as one filtered
 payload per player.
 
+Every operation on a match runs with exclusive access to it. Each one is a
+read-modify-write, and two can start in the same tick from different sockets
+— a player's action and the other player's socket closing. Serializing only
+the disk write would leave both computing from the same snapshot, and the
+later commit would erase a turn that had already been acknowledged and
+animated. The transport orders messages within a connection; this orders them
+between connections.
+
 There is no "room" object binding a match to a live connection. A match is a
 persisted record; connections attach to and detach from it. That is what makes
 "my friend takes their turn tomorrow morning" and "my phone dropped wifi"

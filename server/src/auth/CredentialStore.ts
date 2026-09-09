@@ -46,13 +46,7 @@ export class FileCredentialStore implements CredentialStore {
 
   /** Write-then-rename, so a crash mid-write cannot corrupt a credential. */
   async save(credential: Credential): Promise<void> {
-    const target = this.file(credential.playerId);
-    // Unique per write: two saves racing on one record would otherwise
-    // share a temp path, and whichever renamed second would find it
-    // already gone and throw ENOENT.
-    const temp = `${target}.${crypto.randomUUID()}.tmp`;
-    await fs.promises.writeFile(temp, JSON.stringify(credential), { encoding: "utf8", mode: 0o600 });
-    await fs.promises.rename(temp, target);
+    await this.writeDurably(this.file(credential.playerId), JSON.stringify(credential));
   }
 
   async count(): Promise<number> {
@@ -61,16 +55,62 @@ export class FileCredentialStore implements CredentialStore {
   }
 
   /**
-   * Removes temp files left behind by a crash between write and rename.
-   * Without this they accumulate forever - the `.json` filter never saw them,
-   * so nothing noticed. Called once at startup, when nothing is mid-write.
+   * Write to a unique temp file, flush it to the platter, then rename.
+   *
+   * The fsync is what makes the durability claim true: without it a write can
+   * be acknowledged, the process can survive, and the contents can still be
+   * lost to a power cut. The directory fsync makes the rename itself durable,
+   * and is best-effort because not every platform allows opening a directory.
+   *
+   * The temp name is unique per write: two saves racing on one record would
+   * otherwise share a path, and whichever renamed second would find it
+   * already gone and throw ENOENT.
    */
-  async cleanOrphanedTempFiles(): Promise<number> {
+  private async writeDurably(target: string, contents: string): Promise<void> {
+    const temp = `${target}.${crypto.randomUUID()}.tmp`;
+
+    const handle = await fs.promises.open(temp, "w", 0o600);
+    try {
+      await handle.writeFile(contents, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+
+    await fs.promises.rename(temp, target);
+
+    try {
+      const dir = await fs.promises.open(path.dirname(target), "r");
+      try {
+        await dir.sync();
+      } finally {
+        await dir.close();
+      }
+    } catch {
+      // Not every platform lets a directory be opened. The file itself is
+      // already durable, which is the part that matters most.
+    }
+  }
+
+  /**
+   * Removes temp files left behind by a crash between write and rename.
+   *
+   * Only files old enough that no live write could still own them: deleting
+   * an in-flight temp would turn its rename into ENOENT and lose that write,
+   * which matters because this runs at startup and another process may be
+   * mid-save.
+   */
+  async cleanOrphanedTempFiles(olderThanMs = 5 * 60_000): Promise<number> {
     const files = await fs.promises.readdir(this.dir).catch(() => [] as string[]);
+    const cutoff = Date.now() - olderThanMs;
     let removed = 0;
+
     for (const file of files) {
       if (!file.endsWith(".tmp")) continue;
-      await fs.promises.rm(path.join(this.dir, file), { force: true });
+      const full = path.join(this.dir, file);
+      const stat = await fs.promises.stat(full).catch(() => null);
+      if (stat === null || stat.mtimeMs > cutoff) continue;
+      await fs.promises.rm(full, { force: true });
       removed += 1;
     }
     return removed;

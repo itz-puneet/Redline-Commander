@@ -88,6 +88,7 @@ func _ready() -> void:
 	# A rejoin is answered with a full snapshot rather than an update, so
 	# without this the board keeps showing the position from before the drop.
 	_turns.state_replaced.connect(refresh)
+	Net.opponent_connection_changed.connect(_on_opponent_connection_changed)
 	_turns.action_refused.connect(_on_action_refused)
 	_turns.awaiting_server_changed.connect(_on_awaiting_changed)
 
@@ -377,6 +378,18 @@ func _on_action_refused(reason: String) -> void:
 
 func _on_awaiting_changed(_waiting: bool) -> void:
 	_refresh_bar()
+
+
+## Presence arrives outside a view, because nothing about the board changed -
+## so it is recorded here rather than waiting for the next server snapshot.
+func _on_opponent_connection_changed(slot: int, connected: bool) -> void:
+	var current := state()
+	if current == null:
+		return
+	for player in current.players:
+		if int(player.get("slot", 0)) == slot:
+			player["connected"] = connected
+	_refresh_hud()
 
 
 ## --- internals ---------------------------------------------------------

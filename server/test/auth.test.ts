@@ -221,3 +221,33 @@ test("a wrong token on a known id is still auth_failed, not rate_limited", async
   assert.equal(impostor.ok === false && impostor.reason, "auth_failed",
     "the budget must not become a way to probe which ids exist");
 });
+
+/* ------------- concurrency (review follow-up) --------------------- */
+
+test("two hellos for one new identity cannot both register it", async () => {
+  const { store } = tempStore();
+  const auth = new AuthService(store);
+
+  // Registration is a find-then-save. Run concurrently, both used to find
+  // nothing and both register - last write winning, and the first device
+  // permanently locked out with a secret the store no longer held.
+  const [first, second] = await Promise.all([
+    auth.authenticate("racing-device", GOOD_TOKEN),
+    auth.authenticate("racing-device", OTHER_TOKEN),
+  ]);
+
+  assert.equal(await store.count(), 1, "one identity, one credential");
+
+  // Exactly one of them registered; the other was a login attempt against
+  // whatever the first stored, and only the matching token could succeed.
+  const outcomes = [first, second];
+  assert.equal(outcomes.filter((r) => r.ok && r.registered).length, 1,
+    "exactly one registration");
+
+  // Whichever token won, it still works, and the other does not.
+  const winner = first.ok && first.registered ? GOOD_TOKEN : OTHER_TOKEN;
+  const loser = winner === GOOD_TOKEN ? OTHER_TOKEN : GOOD_TOKEN;
+  assert.ok((await auth.authenticate("racing-device", winner)).ok,
+    "the device that registered can still get in");
+  assert.equal((await auth.authenticate("racing-device", loser)).ok, false);
+});

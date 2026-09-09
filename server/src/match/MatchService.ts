@@ -21,6 +21,13 @@ export interface Delivery {
   view: PlayerView;
 }
 
+/** Who changed presence, and who has not been told yet. */
+export interface PresenceChange {
+  slot: number;
+  connected: boolean;
+  notify: string[];
+}
+
 export interface CommandResult {
   ok: boolean;
   reason?: string;
@@ -35,60 +42,64 @@ function newId(bytes = 6): string {
 export class MatchService {
   private readonly cache = new Map<string, MatchState>();
   /**
-   * One write chain per match. Two commits for the same match can be in
-   * flight at once - a player rejoining while another disconnects, say - and
-   * without this they race, with the slower write landing last and undoing
-   * the newer state.
+   * One operation at a time per match.
+   *
+   * Serializing only the disk write is not enough: every operation here is a
+   * read-modify-write, and `await get()` resolves with the state as of the
+   * *call*. Two operations starting in the same tick - player A's action and
+   * player B's socket closing, say - would both compute from the same
+   * snapshot, and the later commit would write a stale state over the newer
+   * one, erasing a turn that had already been acknowledged and animated.
+   *
+   * Messages from one connection are already ordered by the transport; this
+   * is what orders them *between* connections.
    */
-  private readonly writes = new Map<string, Promise<void>>();
-  /**
-   * Loads in flight, so two concurrent cache misses for one match share a
-   * single read and a single state object. Without this they each build a
-   * separate copy, and whichever commits last silently discards the other's
-   * turn - a real possibility on the first requests after a restart.
-   */
-  private readonly loads = new Map<string, Promise<MatchState | null>>();
+  private readonly operations = new Map<string, Promise<unknown>>();
 
   constructor(private readonly store: MatchStore) {}
 
+  /**
+   * Runs `work` with exclusive access to one match. Everything that reads
+   * then writes a match goes through here.
+   */
+  private exclusive<T>(matchId: string, work: () => Promise<T>): Promise<T> {
+    const previous = this.operations.get(matchId) ?? Promise.resolve();
+    // A failed operation must not poison the queue behind it.
+    const run = previous.then(work, work);
+    this.operations.set(matchId, run);
+
+    const release = () => {
+      if (this.operations.get(matchId) === run) this.operations.delete(matchId);
+    };
+    run.then(release, release);
+    return run;
+  }
+
+  /** Only ever called inside `exclusive`, so no read can race a write. */
   private async get(matchId: string): Promise<MatchState | null> {
     const cached = this.cache.get(matchId);
     if (cached) return cached;
 
-    const inFlight = this.loads.get(matchId);
-    if (inFlight) return inFlight;
-
-    const load = this.store
-      .load(matchId)
-      .then((loaded) => {
-        // Another caller may have cached it while this read was in flight;
-        // theirs wins, so everyone ends up on the same object.
-        const existing = this.cache.get(matchId);
-        if (existing) return existing;
-        if (loaded) this.cache.set(matchId, loaded);
-        return loaded;
-      })
-      .finally(() => this.loads.delete(matchId));
-
-    this.loads.set(matchId, load);
-    return load;
+    const loaded = await this.store.load(matchId);
+    if (loaded) this.cache.set(matchId, loaded);
+    return loaded;
   }
 
+  /**
+   * Persist first, then cache. Caching a state whose write failed would serve
+   * everyone a turn that vanishes on the next restart, and tell only the
+   * acting player it went wrong.
+   */
   private async commit(state: MatchState): Promise<void> {
-    this.cache.set(state.matchId, state);
+    await this.store.save(state);
 
-    const previous = this.writes.get(state.matchId) ?? Promise.resolve();
-    const write = previous
-      .catch(() => undefined)
-      .then(() => this.store.save(state));
-    this.writes.set(state.matchId, write);
-
-    try {
-      await write;
-    } finally {
-      // Only the last writer clears the chain, so a queue behind us survives.
-      if (this.writes.get(state.matchId) === write) this.writes.delete(state.matchId);
+    // A finished match is not coming back; keeping it cached forever is a
+    // slow leak on a server that has hosted a lot of games.
+    if (state.phase === "finished") {
+      this.cache.delete(state.matchId);
+      return;
     }
+    this.cache.set(state.matchId, state);
   }
 
   /** Fan the same authoritative state out as one fog-filtered payload each. */
@@ -122,6 +133,12 @@ export class MatchService {
   }
 
   async join(playerId: string, matchId: string, faction: string): Promise<CommandResult> {
+    return this.exclusive(matchId, () => this.joinLocked(playerId, matchId, faction));
+  }
+
+  private async joinLocked(
+    playerId: string, matchId: string, faction: string,
+  ): Promise<CommandResult> {
     const state = await this.get(matchId);
     if (!state) return { ok: false, reason: "no_such_match", deliveries: [] };
 
@@ -139,6 +156,10 @@ export class MatchService {
   /** Resume a seat. The player's own view is rebuilt from scratch, so a
    *  client that was offline for ten turns needs no catch-up log. */
   async rejoin(playerId: string, matchId: string): Promise<CommandResult> {
+    return this.exclusive(matchId, () => this.rejoinLocked(playerId, matchId));
+  }
+
+  private async rejoinLocked(playerId: string, matchId: string): Promise<CommandResult> {
     const state = await this.get(matchId);
     if (!state) return { ok: false, reason: "no_such_match", deliveries: [] };
 
@@ -150,12 +171,29 @@ export class MatchService {
     return { ok: true, matchId, deliveries: this.deliveries(state, []) };
   }
 
-  async setConnected(playerId: string, matchId: string, connected: boolean): Promise<void> {
-    const state = await this.get(matchId);
-    const player = state?.players.find((p) => p.playerId === playerId);
-    if (!state || !player) return;
-    player.connected = connected;
-    await this.commit(state);
+  /**
+   * Records presence and reports who should be told. Persisting it silently
+   * left the opponent's UI showing a dropped player as present forever, and
+   * the protocol has declared `opponentConnection` since the beginning.
+   */
+  async setConnected(
+    playerId: string, matchId: string, connected: boolean,
+  ): Promise<PresenceChange | null> {
+    return this.exclusive(matchId, async () => {
+      const state = await this.get(matchId);
+      const player = state?.players.find((p) => p.playerId === playerId);
+      if (!state || !player) return null;
+      if (player.connected === connected) return null;
+
+      player.connected = connected;
+      await this.commit(state);
+
+      return {
+        slot: player.slot,
+        connected,
+        notify: state.players.filter((p) => p.playerId !== playerId).map((p) => p.playerId),
+      };
+    });
   }
 
   /**
@@ -165,6 +203,12 @@ export class MatchService {
    * submitted up front would either be guesswork or would leak information.
    */
   async act(playerId: string, matchId: string, action: Action): Promise<CommandResult> {
+    return this.exclusive(matchId, () => this.actLocked(playerId, matchId, action));
+  }
+
+  private async actLocked(
+    playerId: string, matchId: string, action: Action,
+  ): Promise<CommandResult> {
     const state = await this.get(matchId);
     if (!state) return { ok: false, reason: "no_such_match", deliveries: [] };
 

@@ -85,7 +85,7 @@ remembered unit is still alive.
 | `state` | `view` | Full snapshot. Sent on rejoin. |
 | `update` | `events`, `view` | Animate `events`, then adopt `view`. |
 | `actionRejected` | `reason`, `view` | Sent **only** to the offending client. |
-| `opponentConnection` | `slot`, `connected` | Presence, not a forfeit. |
+| `opponentConnection` | `slot`, `connected` | Presence, not a forfeit. Sent on its own, outside any view, because nothing about the board changed. |
 | `error` | `code`, `detail?` | |
 | `pong` | — | |
 

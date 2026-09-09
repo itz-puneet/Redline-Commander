@@ -105,15 +105,30 @@ test("and is ignored even then, unless the proxy is local", () => {
   assert.deepEqual(fromProxy, { ok: true, reason: "forwarded_tls" });
 });
 
-test("a proxy reporting plain http is not treated as secure", () => {
+test("a proxy reporting plain http is refused, not waved through as loopback", () => {
   const proxied: TlsSettings = { ...DEFAULTS, trustProxy: true };
-  const verdict = judgeConnection(
-    { encrypted: false, remoteAddress: "127.0.0.1", forwardedProto: "http" },
-    proxied,
+  // The proxy sits on this machine, so its connections ARE loopback. If the
+  // loopback allowance applied here, every forwarded connection would be
+  // admitted whatever the proxy served - silent plaintext in the exact
+  // deployment the docs recommend.
+  assert.deepEqual(
+    judgeConnection(
+      { encrypted: false, remoteAddress: "127.0.0.1", forwardedProto: "http" }, proxied),
+    { ok: false, reason: "insecure_transport" },
   );
-  // Still accepted, but as loopback rather than as TLS - the distinction
-  // matters because it is the reason, not the outcome, that is audited.
-  assert.deepEqual(verdict, { ok: true, reason: "loopback" });
+  assert.deepEqual(
+    judgeConnection({ encrypted: false, remoteAddress: "127.0.0.1" }, proxied),
+    { ok: false, reason: "insecure_transport" },
+    "a proxy that sets no header at all is not trusted either",
+  );
+});
+
+test("proxy mode still honours the explicit escape hatch", () => {
+  const loose: TlsSettings = { ...DEFAULTS, trustProxy: true, allowInsecure: true };
+  assert.deepEqual(
+    judgeConnection({ encrypted: false, remoteAddress: "127.0.0.1" }, loose),
+    { ok: true, reason: "insecure_allowed" },
+  );
 });
 
 test("a forwarded chain is read from its first hop", () => {

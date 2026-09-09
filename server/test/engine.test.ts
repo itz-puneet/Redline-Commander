@@ -582,8 +582,15 @@ test("orphaned temp files are cleaned up rather than accumulating", async () => 
   fs.writeFileSync(nodePath.join(dir, "abandoned.deadbeef.tmp"), "{}");
   fs.writeFileSync(nodePath.join(dir, "another.cafebabe.tmp"), "{}");
 
-  assert.equal(await store.cleanOrphanedTempFiles(), 2);
-  assert.equal(await store.cleanOrphanedTempFiles(), 0, "cleaning is idempotent");
+  // A temp file young enough that a live write might still own it is spared.
+  // Deleting one would turn its rename into ENOENT and lose that turn -
+  // which matters because this runs at startup, when another process may be
+  // part-way through a save.
+  assert.equal(await store.cleanOrphanedTempFiles(), 0,
+    "fresh temp files must not be swept");
+
+  assert.equal(await store.cleanOrphanedTempFiles(0), 2, "older ones are");
+  assert.equal(await store.cleanOrphanedTempFiles(0), 0, "cleaning is idempotent");
 
   const remaining = fs.readdirSync(dir);
   assert.equal(remaining.length, 1, `left ${JSON.stringify(remaining)}`);
@@ -776,4 +783,69 @@ test("a visible enemy still blocks a path outright", () => {
   });
   assert.equal(result.ok, false, "there is no information to protect here");
   assert.equal(result.ok === false && result.reason, "path_blocked_by_enemy");
+});
+
+/**
+ * Every operation on a match is a read-modify-write, and two can start in
+ * the same tick from different sockets - a player's action and the other
+ * player's socket closing, say. Serializing only the disk write left both
+ * computing from the same snapshot, and the later commit erased a turn that
+ * had already been acknowledged and animated.
+ */
+test("concurrent operations on one match do not lose a turn", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const nodePath = await import("node:path");
+  const { FileMatchStore } = await import("../src/match/MatchStore");
+  const { MatchService } = await import("../src/match/MatchService");
+
+  const dir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "redline-race-"));
+  const service = new MatchService(new FileMatchStore(dir));
+
+  const created = await service.create("player-one", "crossing", "crimson_alliance");
+  assert.ok(created.ok);
+  const matchId = created.matchId!;
+  assert.ok((await service.join("player-two", matchId, "azure_federation")).ok);
+
+  const before = created.deliveries[0].view;
+  const mine = before.units.filter((u) => u.ownerSlot === 1);
+  assert.ok(mine.length > 0);
+
+  // An action and a presence change, started together.
+  const [acted] = await Promise.all([
+    service.act("player-one", matchId, { type: "endTurn" }),
+    service.setConnected("player-two", matchId, false),
+  ]);
+  assert.ok(acted.ok, acted.reason);
+
+  // Both landed: the turn passed AND the disconnect was recorded. Before, one
+  // overwrote the other.
+  const resumed = await service.rejoin("player-one", matchId);
+  assert.ok(resumed.ok);
+  const view = resumed.deliveries.find((d) => d.playerId === "player-one")!.view;
+  assert.equal(view.currentSlot, 2, "the turn that was acknowledged must stand");
+  assert.equal(view.players.find((p) => p.slot === 2)!.connected, false,
+    "and so must the disconnect");
+});
+
+test("a presence change reports who has not been told", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const nodePath = await import("node:path");
+  const { FileMatchStore } = await import("../src/match/MatchStore");
+  const { MatchService } = await import("../src/match/MatchService");
+
+  const dir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "redline-presence-"));
+  const service = new MatchService(new FileMatchStore(dir));
+  const created = await service.create("host", "crossing", "crimson_alliance");
+  const matchId = created.matchId!;
+  await service.join("guest", matchId, "azure_federation");
+
+  const change = await service.setConnected("guest", matchId, false);
+  assert.ok(change, "a real change is reported");
+  assert.equal(change.connected, false);
+  assert.deepEqual(change.notify, ["host"], "the opponent, not the player who left");
+
+  assert.equal(await service.setConnected("guest", matchId, false), null,
+    "setting it to what it already was announces nothing");
 });

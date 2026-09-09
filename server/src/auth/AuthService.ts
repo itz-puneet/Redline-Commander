@@ -37,6 +37,14 @@ export type AuthResult =
   | { ok: false; reason: AuthFailure };
 
 export class AuthService {
+  /**
+   * One authentication at a time per player id. Registration is a
+   * find-then-save, so two `hello` frames for the same unregistered id could
+   * both find nothing, both register, and leave the first device permanently
+   * locked out with a secret the store no longer holds.
+   */
+  private readonly inFlight = new Map<string, Promise<AuthResult>>();
+
   constructor(private readonly store: CredentialStore) {}
 
   /**
@@ -51,6 +59,26 @@ export class AuthService {
   ): Promise<AuthResult> {
     if (!isValidPlayerId(playerId)) return { ok: false, reason: "invalid_player_id" };
     if (!isValidToken(token)) return { ok: false, reason: "invalid_token" };
+
+    const id = playerId;
+    const previous = this.inFlight.get(id) ?? Promise.resolve<AuthResult | null>(null);
+    const run = previous
+      .catch(() => null)
+      .then(() => this.check(id, token, canRegister));
+    this.inFlight.set(id, run);
+
+    const release = () => {
+      if (this.inFlight.get(id) === run) this.inFlight.delete(id);
+    };
+    run.then(release, release);
+    return run;
+  }
+
+  private async check(
+    playerId: string,
+    token: string,
+    canRegister: () => boolean,
+  ): Promise<AuthResult> {
 
     const existing = await this.store.find(playerId);
 
