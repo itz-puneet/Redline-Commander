@@ -19,6 +19,22 @@ func highlight(tiles: Array, color: Color, outline: bool = false) -> void:
 	queue_redraw()
 
 
+## Test seams. The overlay draws to a canvas nothing can read back, so
+## without these the only thing a test can assert is that calling the method
+## did not crash - which is what it used to assert.
+func layer_count() -> int:
+	return _layers.size()
+
+
+func highlighted_tiles() -> Array:
+	var out: Array = []
+	for layer in _layers:
+		for tile in layer["tiles"]:
+			if not out.has(tile):
+				out.append(tile)
+	return out
+
+
 func _draw() -> void:
 	var size := float(BoardTheme.TILE_SIZE)
 	for layer in _layers:

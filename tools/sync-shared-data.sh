@@ -14,6 +14,14 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 src="$repo_root/shared/data"
 dst="$repo_root/client/data"
 
+# An unrecognised argument must not fall through to the copy: a mistyped
+# --check would silently overwrite client/data instead of failing on drift,
+# which is the opposite of what was asked for.
+if [[ $# -gt 1 ]] || { [[ $# -eq 1 ]] && [[ "$1" != "--check" ]]; }; then
+  echo "usage: $(basename "$0") [--check]" >&2
+  exit 2
+fi
+
 if [[ "${1:-}" == "--check" ]]; then
   if diff -r -q "$src" "$dst" >/dev/null 2>&1; then
     echo "client/data is in sync with shared/data"

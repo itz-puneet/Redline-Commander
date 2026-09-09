@@ -179,10 +179,15 @@ test("credentials survive a restart", async () => {
   assert.equal(impostor.ok, false);
 });
 
-test("the store refuses to build a path from a bad id", () => {
+test("the store refuses to build a path from a bad id", async () => {
   const { dir } = tempStore();
   const store = new FileCredentialStore(dir);
-  assert.rejects(() => store.find("../../etc/passwd"));
+  // Awaited: an un-awaited assert.rejects reports ok whatever happens, and
+  // surfaces only as a file-level unhandled rejection naming no test.
+  await assert.rejects(() => store.find("../../etc/passwd"));
+  await assert.rejects(() => store.save({
+    playerId: "../escape", salt: "s", tokenHash: "h", createdAt: "", lastSeenAt: "",
+  }));
 });
 
 /* ---------------- registration budget (review follow-up) ---------- */

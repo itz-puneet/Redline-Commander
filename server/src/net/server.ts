@@ -264,6 +264,7 @@ export function attachGameServer(
               playerId: result.playerId,
               serverVersion: SERVER_VERSION,
               protocolVersion: PROTOCOL_VERSION,
+              registered: result.registered,
             });
           }
 

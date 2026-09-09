@@ -80,7 +80,7 @@ remembered unit is still alive.
 
 | `t` | Fields | Notes |
 |---|---|---|
-| `welcome` | `playerId`, `serverVersion`, `protocolVersion` | |
+| `welcome` | `playerId`, `serverVersion`, `protocolVersion`, `registered` | `registered` is true when this connection created the identity rather than logging in with a known one. |
 | `matchCreated` | `matchId`, `joinCode` | |
 | `state` | `view` | Full snapshot. Sent on rejoin. |
 | `update` | `events`, `view` | Animate `events`, then adopt `view`. |

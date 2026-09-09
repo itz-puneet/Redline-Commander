@@ -19,8 +19,19 @@
 set -euo pipefail
 
 use_tls=0
-if [[ "${1:-}" == "--tls" ]]; then
-  use_tls=1
+if [[ $# -gt 1 ]]; then
+  echo "usage: $(basename "$0") [--tls]" >&2
+  exit 2
+elif [[ $# -eq 1 ]]; then
+  if [[ "$1" == "--tls" ]]; then
+    use_tls=1
+  else
+    # Falling through to plaintext here would report success for a run that
+    # never tested what was asked - and the client's "is it encrypted" check
+    # is gated on this same flag, so it would go quiet too.
+    echo "$(basename "$0"): unknown option '$1' (expected --tls)" >&2
+    exit 2
+  fi
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

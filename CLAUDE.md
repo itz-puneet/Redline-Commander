@@ -174,3 +174,19 @@ Two Godot gotchas worth knowing:
   suite whose phases can suspend a completion sentinel (see the `_phases`
   counter in `build_check`). A suite that reports success while its scene
   failed to load is worse than one that fails.
+
+## Writing checks that hold the code to account
+
+The recurring failure here is not a wrong assertion, it is one that passes no
+matter what the code does. It has happened several times: overlay checks that
+asserted an `@onready` reference was non-null, a fog loop that never ran
+because the assertion below it proved the collection was empty, an
+`assert.rejects` left un-awaited, and an entire seeded RNG that could be
+replaced with `return { value: min, counter }` while all 102 tests stayed
+green.
+
+So when a check matters, **break the code and watch it fail**. Gut the
+function, revert the guard, stub the generator - then restore it. A check
+that stays green through that is not testing anything, and it is worse than
+no check because it reads like coverage. Several tests in both suites carry a
+comment saying which mutation they were verified against.

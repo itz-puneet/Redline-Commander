@@ -46,25 +46,31 @@ const send = (ws, message) => ws.send(JSON.stringify(message));
   // Auth first, on an identity of its own. A second connection claiming an
   // id displaces the first, so probing with the match players' ids would
   // pull the socket out from under the match being set up.
-  const first = await open("smoke-carol");
+  // A fresh identity every run, so this really is a first use even when the
+  // server has state from a previous one.
+  const newcomer = `smoke-new-${Date.now().toString(36)}`;
+  const first = await open(newcomer);
   await wait(200);
-  check("a new device registers on first use", last(first, "welcome") !== undefined, true);
+  check("a new device registers on first use", last(first, "welcome")?.registered, true);
   first.close();
   await wait(100);
 
-  const returning = await open("smoke-carol");
+  const returning = await open(newcomer);
   await wait(200);
-  check("and is recognised when it comes back", last(returning, "welcome") !== undefined, true);
+  // Distinguishing these two is the whole point of trust-on-first-use;
+  // asserting only that both were welcomed proved nothing about it.
+  check("and is recognised as a login, not a new registration",
+    last(returning, "welcome")?.registered, false);
   returning.close();
   await wait(100);
 
-  const impostor = await open("smoke-carol", "wrong-token-entirely-0000");
+  const impostor = await open(newcomer, "wrong-token-entirely-0000");
   await wait(200);
   check("an impostor with the wrong secret is refused", last(impostor, "error")?.code, "auth_failed");
   check("and is told nothing else", last(impostor, "welcome"), undefined);
   impostor.close();
 
-  const malformed = await open("smoke-carol", "short");
+  const malformed = await open(newcomer, "short");
   await wait(200);
   check("a malformed token is refused on shape", last(malformed, "error")?.code, "invalid_token");
   malformed.close();
@@ -80,6 +86,10 @@ const send = (ws, message) => ws.send(JSON.stringify(message));
   // as `hello` overtakes it and is rejected as unauthenticated.
   const impatient = new WebSocket(URL);
   impatient.inbox = [];
+  // Every socket needs an error listener, including the ones built by hand:
+  // an 'error' event with no listener throws outside this async function,
+  // where the catch at the bottom will never see it.
+  impatient.on("error", (err) => console.error("impatient socket error", err.message));
   impatient.on("message", (data) => impatient.inbox.push(JSON.parse(data.toString())));
   await new Promise((resolve) => impatient.on("open", resolve));
   impatient.send(JSON.stringify({
@@ -125,6 +135,7 @@ const send = (ws, message) => ws.send(JSON.stringify(message));
   // with no way to recover.
   const chatty = new WebSocket(URL);
   chatty.inbox = [];
+  chatty.on("error", (err) => console.error("chatty socket error", err.message));
   chatty.on("message", (data) => chatty.inbox.push(JSON.parse(data.toString())));
   await new Promise((resolve) => chatty.on("open", resolve));
   const chattyClosed = new Promise((resolve) => chatty.on("close", (code) => resolve(code)));

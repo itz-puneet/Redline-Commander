@@ -257,19 +257,36 @@ test("artillery cannot shell what nobody can see", () => {
 
 test("a player's view never contains enemy units they cannot see", () => {
   const state = startedMatch();
-  const visible = visibleTiles(state, 1);
-  const view = buildPlayerView(state, 1);
 
-  for (const unit of view.units) {
-    if (unit.ownerSlot === 1) continue;
+  // The starting positions are on opposite corners, so nothing enemy shows.
+  const view = buildPlayerView(state, 1);
+  assert.equal(view.units.filter((u) => u.ownerSlot === 2).length, 0);
+  assert.equal(view.units.filter((u) => u.ownerSlot === 1).length, 3);
+
+  // Now with enemies both in and out of sight, so the filter is actually
+  // exercised rather than trivially satisfied by there being none.
+  const contact = structuredClone(state);
+  const mine = Object.values(contact.units).find((u) => u.ownerSlot === 1)!;
+  const [near, far] = Object.values(contact.units).filter((u) => u.ownerSlot === 2);
+  near.x = mine.x + 1;
+  near.y = mine.y;
+  far.x = contact.map.width - 1;
+  far.y = contact.map.height - 1;
+
+  const visible = visibleTiles(contact, 1);
+  const contactView = buildPlayerView(contact, 1);
+  const enemies = contactView.units.filter((u) => u.ownerSlot === 2);
+
+  assert.equal(enemies.length, 1, "the adjacent enemy, and only that one");
+  assert.equal(enemies[0].id, near.id);
+  for (const unit of enemies) {
     assert.ok(
-      visible.has(unit.y! * state.map.width + unit.x!),
+      visible.has(unit.y! * contact.map.width + unit.x!),
       `enemy unit ${unit.id} leaked into slot 1's view`,
     );
   }
-  // The starting positions are on opposite corners of the map.
-  assert.equal(view.units.filter((u) => u.ownerSlot === 2).length, 0);
-  assert.equal(view.units.filter((u) => u.ownerSlot === 1).length, 3);
+  assert.equal(contactView.units.some((u) => u.id === far.id), false,
+    "the distant one is not in the payload at all");
 });
 
 test("enemy units in view are stripped of unobservable fields", () => {
@@ -645,10 +662,18 @@ test("an attacker killed by the counterattack still hears what happened", () => 
     type: "attack", unitId: "mine", targetUnitId: "theirs",
   });
   assert.ok(result.ok);
+  assert.equal(result.state.units["mine"], undefined,
+    "the scenario must actually kill the attacker, or it tests nothing");
+  assert.ok(result.events.some((e) => e.type === "unitDestroyed" && e.unitId === "mine"));
 
   const attacker = filterEventsFor(result.state, 1, result.events);
   assert.ok(attacker.some((e) => e.type === "unitAttacked"),
     "the player who submitted the action must get its result");
+  assert.ok(
+    attacker.some((e) => e.type === "unitDestroyed" && e.unitId === "mine"),
+    "and must be told their own unit died - the id no longer resolves in the "
+      + "post-action state, which is what used to drop this event",
+  );
 });
 
 test("an enemy move is reported only as far as it was watched", () => {

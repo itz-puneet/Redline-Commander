@@ -29,7 +29,12 @@ export type ClientMessage =
 /* ---------------------------- server -> client --------------------- */
 
 export type ServerMessage =
-  | { t: "welcome"; playerId: string; serverVersion: string; protocolVersion: number }
+  /** `registered` is true when this connection created the identity, rather
+   *  than logging in with one the server already knew. */
+  | {
+      t: "welcome"; playerId: string; serverVersion: string;
+      protocolVersion: number; registered: boolean;
+    }
   | { t: "error"; code: string; detail?: string }
   /** Full authoritative snapshot, already filtered for the recipient. Sent on
    *  join, on rejoin, and whenever the client reports a version gap. */

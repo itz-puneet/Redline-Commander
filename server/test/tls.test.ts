@@ -37,6 +37,10 @@ test("only an exact 1 enables the escape hatches", () => {
   assert.equal(readTlsSettings({ REDLINE_ALLOW_INSECURE: "yes" }).allowInsecure, false);
   assert.equal(readTlsSettings({ REDLINE_ALLOW_INSECURE: "1" }).allowInsecure, true);
   assert.equal(readTlsSettings({ REDLINE_TRUST_PROXY: "0" }).trustProxy, false);
+  // Every other proxy test builds settings literally, so without this a
+  // broken read of this variable would never be noticed.
+  assert.equal(readTlsSettings({ REDLINE_TRUST_PROXY: "1" }).trustProxy, true);
+  assert.equal(readTlsSettings({ REDLINE_TRUST_PROXY: "true" }).trustProxy, false);
 });
 
 test("half a TLS configuration is refused rather than downgraded", () => {

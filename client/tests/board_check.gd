@@ -101,12 +101,28 @@ func _check_fog(state: MatchState) -> void:
 func _check_overlays(state: MatchState) -> void:
 	var tank: Dictionary = state.units["a1"]
 	var reachable := MovementPreview.reachable_tiles(state, tank)
-	_board.show_movement_range(reachable.keys())
-	_board.show_selection(Vector2i(6, 4))
-	_check("overlays accept a range without error", _board.overlay_layer != null)
 
 	_board.clear_overlays()
-	_check("overlays can be cleared", true)
+	_check("an empty overlay holds nothing", _board.overlay_layer.layer_count() == 0)
+
+	_board.show_movement_range(reachable.keys())
+	_check("a movement range is actually held",
+		_board.overlay_layer.layer_count() == 1,
+		"%d layers" % _board.overlay_layer.layer_count())
+	var held := _board.overlay_layer.highlighted_tiles()
+	_check("with every tile of the range in it", held.size() == reachable.size(),
+		"%d held for %d reachable" % [held.size(), reachable.size()])
+	_check("and the tiles are the ones asked for", held.has(reachable.keys()[0]))
+
+	_board.show_selection(Vector2i(6, 4))
+	_check("a selection adds a layer rather than replacing one",
+		_board.overlay_layer.layer_count() == 2)
+	_check("and marks the selected tile",
+		_board.overlay_layer.highlighted_tiles().has(Vector2i(6, 4)))
+
+	_board.clear_overlays()
+	_check("clearing removes them all", _board.overlay_layer.layer_count() == 0)
+	_check("and leaves no tiles behind", _board.overlay_layer.highlighted_tiles().is_empty())
 
 	# The range the overlay draws is the range the server would accept, so
 	# spot-check the terrain rules it has to respect.

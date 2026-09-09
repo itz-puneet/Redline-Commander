@@ -22,13 +22,21 @@ fi
 
 mkdir -p "$out_dir"
 
-openssl req -x509 -newkey rsa:2048 -nodes \
+# stderr is kept: discarding it under `set -e` meant an OpenSSL too old for
+# -addext, or a hostname openssl would not accept, aborted the script with no
+# explanation at all - and live-check.sh discards this script's stdout too.
+if ! openssl req -x509 -newkey rsa:2048 -nodes \
   -keyout "$out_dir/key.pem" \
   -out "$out_dir/cert.pem" \
   -days 365 \
   -subj "/CN=$host" \
-  -addext "subjectAltName=DNS:$host,DNS:localhost,IP:127.0.0.1" \
-  2>/dev/null
+  -addext "subjectAltName=DNS:$host,DNS:localhost,IP:127.0.0.1"
+then
+  echo "dev-cert: openssl failed (see the error above)." >&2
+  echo "dev-cert: -addext needs OpenSSL 1.1.1 or newer; yours is:" >&2
+  openssl version >&2 || true
+  exit 1
+fi
 
 chmod 600 "$out_dir/key.pem"
 
