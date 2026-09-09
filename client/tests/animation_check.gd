@@ -12,6 +12,9 @@ extends Node
 const MATCH_SCENE := preload("res://scenes/match.tscn")
 
 var _failures := 0
+## Phases that ran to completion, so a suite that stops early cannot report
+## success - see the CLAUDE.md note about await and coroutines.
+var _phases := 0
 var _match: Node = null
 var _controller: MatchController = null
 var _board: Board = null
@@ -22,6 +25,10 @@ func _ready() -> void:
 	await _check_playback()
 	await _check_render_waits_for_animation()
 	await _check_input_is_gated()
+
+	await _check_overlapping_updates()
+
+	_check("every phase ran to completion", _phases == 4, "%d of 4" % _phases)
 
 	if _failures == 0:
 		print("\nanimation_check: all checks passed")
@@ -159,6 +166,7 @@ func _check_playback() -> void:
 	_check("a capture flash cleans itself up",
 		_board.effects_layer.get_child_count() < 20,
 		"%d leftover effects" % _board.effects_layer.get_child_count())
+	_phases += 1
 
 
 ## The render must come after the animation, or there is nothing to move.
@@ -195,10 +203,44 @@ func _check_render_waits_for_animation() -> void:
 	_check("and the board ends on the adopted state",
 		_board.unit_node("a1").position == _board.world_at_tile(Vector2i(6, 6)),
 		"at %s" % _board.unit_node("a1").position)
+	_phases += 1
 
 
 ## A tap while the board shows stale positions would mean something else by
 ## the time it landed, so taps are dropped rather than queued.
+## An update arriving mid-animation used to leave the first settle to finish:
+## it would clear the animating flag and re-render while the second sequence
+## was still playing, which is the one thing rule 6 forbids.
+func _check_overlapping_updates() -> void:
+	await _build()
+	_controller.set_animation_scale(1.0)
+
+	var turns: TurnController = _match.get_node("TurnController")
+	var first := [{"type": "unitMoved", "unitId": "a1",
+		"from": {"x": 6, "y": 4}, "to": {"x": 6, "y": 5},
+		"path": [{"x": 6, "y": 5}], "fuelSpent": 1}]
+	var second := [{"type": "unitMoved", "unitId": "a4",
+		"from": {"x": 3, "y": 2}, "to": {"x": 4, "y": 2},
+		"path": [{"x": 4, "y": 2}], "fuelSpent": 1}]
+
+	turns.action_confirmed.emit(first)
+	await get_tree().process_frame
+	_check("the first animation is running", _controller.is_animating())
+
+	turns.action_confirmed.emit(second)
+	await get_tree().process_frame
+	_check("a second update keeps the board locked", _controller.is_animating(),
+		"the first run cleared the flag out from under the second")
+
+	_controller.set_animation_scale(0.0)
+	for _i in 120:
+		await get_tree().process_frame
+		if not _controller.is_animating():
+			break
+	_check("and both eventually finish", not _controller.is_animating())
+	_phases += 1
+
+
 func _check_input_is_gated() -> void:
 	await _build()
 	_controller.set_animation_scale(1.0)
@@ -217,6 +259,14 @@ func _check_input_is_gated() -> void:
 	_check("taps are ignored while animating", _controller.selected_unit_id().is_empty())
 	_check("and nothing is submitted", sent.is_empty())
 
+	# The bar buttons had no animation guard, only tap_tile did - and unlike a
+	# tap, End Turn cannot be taken back.
+	var bar := _match.get_node("UI/ActionBar")
+	bar.wait_pressed.emit()
+	bar.end_turn_pressed.emit()
+	_check("bar buttons are ignored while animating too", sent.is_empty(),
+		"submitted %s" % [sent])
+
 	_controller.set_animation_scale(0.0)
 	for _i in 60:
 		await get_tree().process_frame
@@ -227,3 +277,4 @@ func _check_input_is_gated() -> void:
 	_controller.tap_tile(Vector2i(3, 2))
 	_check("and a tap works again", _controller.selected_unit_id() == "a4",
 		"selected '%s'" % _controller.selected_unit_id())
+	_phases += 1

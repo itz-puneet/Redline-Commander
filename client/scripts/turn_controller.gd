@@ -10,6 +10,10 @@ extends Node
 ## means a rejection costs one action, not the whole turn.
 
 signal action_sent(action: Dictionary)
+## A full snapshot replaced the state - on rejoin, or after a resync. Nothing
+## was animated and nothing was confirmed, but the board is now stale and has
+## to be redrawn.
+signal state_replaced()
 signal action_confirmed(events: Array)
 signal action_refused(reason: String)
 signal awaiting_server_changed(waiting: bool)
@@ -96,6 +100,7 @@ func _on_state_received(view: Dictionary) -> void:
 func apply_server_state(view: Dictionary) -> void:
 	adopt_view(view)
 	_clear_in_flight()
+	state_replaced.emit()
 
 
 ## Adopt a server view. Public so tests and offline previews can seed a

@@ -84,6 +84,16 @@ func _check_server_urls() -> void:
 		ServerUrl.normalise("  wss://play.example.com/play  ") == "wss://play.example.com/play")
 	_check("and an empty field stays empty", ServerUrl.normalise("   ") == "")
 
+	# A join that the server refuses must not leave a match id behind: Net
+	# re-sends `rejoinMatch` for whatever it holds on every reconnect, so a
+	# bogus one is asked for forever.
+	var before := Net.current_match_id
+	Net.current_match_id = ""
+	Net.join_match("never-accepted", "crimson_alliance")
+	_check("joining does not claim the match before the server seats us",
+		Net.current_match_id.is_empty(), "held '%s'" % Net.current_match_id)
+	Net.current_match_id = before
+
 	_check("a valid address validates", ServerUrl.is_valid("wss://example.com/play"))
 	_check("a schemeless one does not", not ServerUrl.is_valid("example.com/play"))
 	_check("and neither does an empty one", not ServerUrl.is_valid(""))

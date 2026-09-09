@@ -19,6 +19,8 @@ func _ready() -> void:
 	_check_data_tables()
 	_check_match_state()
 	_check_movement_preview()
+	_check_path_through_friendly()
+	_check_attack_needs_ammo()
 
 	if _failures == 0:
 		print("\nboot_check: all checks passed")
@@ -78,6 +80,70 @@ func _check_match_state() -> void:
 	_check("units are found by owner", state.units_of(1).size() == 4 and state.units_of(2).size() == 2,
 		"got %d own, %d enemy" % [state.units_of(1).size(), state.units_of(2).size()])
 	_check("out-of-bounds reads are safe", state.terrain_at(-1, 0) == "" and state.unit_at(99, 99).is_empty())
+
+
+## A view with only the units this test cares about.
+func _view_with(units: Array) -> Dictionary:
+	var view := Fixtures.match_view(true)
+	view["units"] = units
+	return view
+
+
+func _unit(id: String, type: String, slot: int, x: int, y: int, extra: Dictionary = {}) -> Dictionary:
+	var unit := {
+		"id": id, "unitType": type, "ownerSlot": slot, "x": x, "y": y, "hp": 100,
+		"fuel": 99, "ammo": 9, "hasMoved": false, "hasActed": false,
+		"captureProgress": 0, "cargo": [],
+	}
+	unit.merge(extra, true)
+	return unit
+
+
+## A route may run straight through a friendly unit even though it cannot
+## stop on one. Conflating "reachable" with "can stand here" left the tiles
+## in between out of the cost field, so no route could be reconstructed - and
+## the empty path that fell out was a legal no-op the server accepted,
+## silently costing the unit its move.
+func _check_path_through_friendly() -> void:
+	var state := MatchState.from_view(_view_with([
+		_unit("mover", "light_tank", 1, 5, 4),
+		_unit("friend", "infantry", 1, 6, 4),
+	]))
+	var mover: Dictionary = state.units["mover"]
+
+	var stoppable := MovementPreview.reachable_tiles(state, mover)
+	_check("a tile with a friendly unit on it is not a place to stop",
+		not stoppable.has(Vector2i(6, 4)))
+	_check("but the tile past it is reachable", stoppable.has(Vector2i(7, 4)))
+
+	var field := MovementPreview.cost_field(state, mover)
+	_check("and the friendly tile is still in the cost field",
+		field.has(Vector2i(6, 4)), "a route cannot be traced through a hole")
+
+	var route := MovementPreview.path_to(state, mover, Vector2i(7, 4))
+	_check("a route through the friendly unit is found", not route.is_empty(),
+		"an empty path would burn the unit's move for nothing")
+	_check("and it ends where asked", route.size() > 0 and route[-1] == Vector2i(7, 4))
+	_check("passing over the friendly tile on the way",
+		route.has(Vector2i(6, 4)), "got %s" % [route])
+
+
+## The server checks ammo before allowing an attack; an overlay that does not
+## offers targets the server then refuses.
+func _check_attack_needs_ammo() -> void:
+	var state := MatchState.from_view(_view_with([
+		_unit("gun", "light_tank", 1, 6, 4),
+		_unit("target", "infantry", 2, 7, 4),
+	]))
+	_check("a loaded unit is offered its target",
+		MovementPreview.attackable_tiles(state, state.units["gun"]).has(Vector2i(7, 4)))
+
+	var dry := MatchState.from_view(_view_with([
+		_unit("gun", "light_tank", 1, 6, 4, {"ammo": 0}),
+		_unit("target", "infantry", 2, 7, 4),
+	]))
+	_check("an empty magazine is offered nothing",
+		MovementPreview.attackable_tiles(dry, dry.units["gun"]).is_empty())
 
 
 func _check_movement_preview() -> void:

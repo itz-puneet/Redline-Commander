@@ -32,6 +32,7 @@ func _ready() -> void:
 	_reset()
 
 	_check_selection()
+	_check_snapshot_redraws()
 	_check_move()
 	_check_attack()
 	_check_deselect_and_switch()
@@ -64,6 +65,29 @@ func _reset(view: Dictionary = {}) -> void:
 
 func _last() -> Dictionary:
 	return _sent[-1] if not _sent.is_empty() else {}
+
+
+## A rejoin is answered with a full snapshot rather than an update, and
+## nothing used to redraw on one - so a player who dropped and came back sat
+## looking at the board from before the disconnect until they acted.
+func _check_snapshot_redraws() -> void:
+	_reset()
+	var board: Board = _match.get_node("Board")
+	_check("the board starts where the fixture put the tank",
+		board.unit_node("a1").position == board.world_at_tile(Vector2i(6, 4)),
+		"at %s" % board.unit_node("a1").position)
+
+	var moved := Fixtures.match_view()
+	for unit in moved["units"]:
+		if String(unit["id"]) == "a1":
+			unit["x"] = 6
+			unit["y"] = 6
+
+	# Exactly what arrives after a reconnect: Net delivers a `state` frame.
+	Net.state_received.emit(moved)
+	_check("a snapshot redraws the board",
+		board.unit_node("a1").position == board.world_at_tile(Vector2i(6, 6)),
+		"still at %s" % board.unit_node("a1").position)
 
 
 ## --- selection ---------------------------------------------------------
@@ -99,9 +123,16 @@ func _check_move() -> void:
 	_check("tapping outside the range submits nothing", _sent.is_empty())
 	_check("and drops the selection", _controller.selected_unit_id().is_empty())
 
+	# A destination the preview can reach but no route reaches would submit an
+	# empty path, which the server treats as a legal no-op - marking the unit
+	# moved and costing it its turn for nothing.
 	_reset()
+	var refusals: Array[String] = []
+	_controller.action_refused.connect(func(reason: String): refusals.append(reason))
 	_controller.tap_tile(Vector2i(6, 4))
 	_controller.tap_tile(Vector2i(6, 6))
+	_check("a normal move is not mistaken for a routeless one",
+		not refusals.has("no_route"), "refused with %s" % [refusals])
 
 	var action := _last()
 	_check("tapping a reachable tile submits a move", String(action.get("type", "")) == "move",

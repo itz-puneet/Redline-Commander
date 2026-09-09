@@ -167,7 +167,14 @@ tiles rather than synthesising touch events; the thin layer in front of it
 
 `MatchController` holds exactly one piece of UI state — which unit is
 selected — and re-validates it against every server view rather than trusting
-it. A unit that died, moved, or was spent while the player was deciding
+it. Every order goes through one guard, so nothing is submitted while an
+animation is playing: the board is showing stale positions, and a button
+press means whatever was true before it started.
+
+A `state` frame — what a rejoin is answered with — redraws the board. That is
+easy to miss, because unlike an `update` it carries no events to animate;
+without it a player who reconnects sits looking at the position from before
+they dropped. A unit that died, moved, or was spent while the player was deciding
 cannot leave a stale selection behind.
 
 Attacking takes two taps: the first arms the target and puts the damage

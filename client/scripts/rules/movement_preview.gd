@@ -11,14 +11,34 @@ extends RefCounted
 ## It is a deliberate duplicate of the server's algorithm, which is safe only
 ## because both sides read the same numbers out of the same data files. Keep
 ## the algorithm in step; never hardcode a cost here.
+##
+## Note the split between `cost_field` and `reachable_tiles`: what a unit can
+## reach and what it can stop on are different sets, because a friendly unit
+## can be passed through but not stood on. Collapsing them leaves holes in
+## the cost field that a route cannot be traced back through.
 
 const NEIGHBOURS: Array[Vector2i] = [
 	Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0),
 ]
 
 
-## Dijkstra over terrain move costs. Returns tile position -> cost to reach.
+## Tiles the unit may end its move on: tile position -> cost to reach.
+## This is the overlay. It is a subset of the cost field below, because a
+## friendly unit can be passed through but not stopped on.
 static func reachable_tiles(state: MatchState, unit: Dictionary) -> Dictionary:
+	var unit_id := String(unit.get("id", ""))
+	var field := cost_field(state, unit)
+	var stoppable: Dictionary = {}
+	for tile in field:
+		var occupant := state.unit_at(tile.x, tile.y)
+		if occupant.is_empty() or String(occupant.get("id", "")) == unit_id:
+			stoppable[tile] = field[tile]
+	return stoppable
+
+
+## Dijkstra over terrain move costs, including tiles that can only be passed
+## through. Returns tile position -> cost to reach.
+static func cost_field(state: MatchState, unit: Dictionary) -> Dictionary:
 	var stats := GameData.unit_stats(String(unit.get("unitType", "")))
 	if stats.is_empty():
 		return {}
@@ -48,10 +68,9 @@ static func reachable_tiles(state: MatchState, unit: Dictionary) -> Dictionary:
 		frontier.remove_at(cheapest)
 		var current_cost := int(best[current])
 
-		# A tile can be passed through but only stopped on if it is free.
-		var occupant := state.unit_at(current.x, current.y)
-		if occupant.is_empty() or String(occupant.get("id", "")) == unit_id:
-			result[current] = current_cost
+		# Every tile the unit can reach, whether or not it may stop there -
+		# reconstructing a path needs the cost of the tiles it passes over.
+		result[current] = current_cost
 
 		for step in NEIGHBOURS:
 			var next := current + step
@@ -84,7 +103,10 @@ static func reachable_tiles(state: MatchState, unit: Dictionary) -> Dictionary:
 ## downhill. Returns [] if unreachable. The result is what gets sent as the
 ## `path` of a move action.
 static func path_to(state: MatchState, unit: Dictionary, destination: Vector2i) -> Array[Vector2i]:
-	var costs := reachable_tiles(state, unit)
+	# The full field, not just the stoppable tiles: a route may pass straight
+	# through a friendly unit, and walking back through a hole in the costs
+	# would fail to find any route at all.
+	var costs := cost_field(state, unit)
 	if not costs.has(destination):
 		return []
 
@@ -126,6 +148,12 @@ static func attackable_tiles(state: MatchState, unit: Dictionary) -> Array[Vecto
 	if stats.is_empty() or stats.get("fire_mode") == null:
 		return []
 	if String(stats.get("fire_mode", "")) == "indirect" and bool(unit.get("hasMoved", false)):
+		return []
+
+	# An empty magazine is checked server-side too; without this the overlay
+	# offers targets that CombatForecast then contradicts.
+	var ammo: Variant = unit.get("ammo")
+	if stats.get("max_ammo") != null and ammo != null and int(ammo) <= 0:
 		return []
 
 	var min_range := int(stats.get("min_range", 1))

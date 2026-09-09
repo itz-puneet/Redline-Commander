@@ -53,6 +53,9 @@ var _attack_targets: Array = []        ## Vector2i
 ## The target a confirming tap would hit. Empty means nothing is armed.
 var _armed_target_id: String = ""
 var _animating := false
+## Bumped on every settle, so a run that is overtaken by a newer update knows
+## to stand down rather than clearing the flag and redrawing mid-tween.
+var _settle_generation := 0
 ## Whose turn it last was, so a change can be announced exactly once.
 var _turn_signature: String = ""
 
@@ -82,6 +85,9 @@ func _ready() -> void:
 
 	_board.tile_tapped.connect(tap_tile)
 	_turns.action_confirmed.connect(_on_action_settled)
+	# A rejoin is answered with a full snapshot rather than an update, so
+	# without this the board keeps showing the position from before the drop.
+	_turns.state_replaced.connect(refresh)
 	_turns.action_refused.connect(_on_action_refused)
 	_turns.awaiting_server_changed.connect(_on_awaiting_changed)
 
@@ -160,7 +166,7 @@ func tap_tile(tile: Vector2i) -> void:
 	# Taps during an animation are dropped rather than queued: the board is
 	# showing stale positions while it plays, so a tap on what is drawn would
 	# mean something different by the time it landed.
-	if current == null or _animating or not _turns.can_act():
+	if current == null or not _can_order():
 		return
 
 	# A tap on the board while the menu is up dismisses it, and does nothing
@@ -200,7 +206,15 @@ func tap_tile(tile: Vector2i) -> void:
 		return
 
 	if not bool(selected.get("hasMoved", false)) and _move_range.has(tile) and tapped.is_empty():
-		_turns.move_unit(_selected_id, MovementPreview.path_to(current, selected, tile))
+		var route := MovementPreview.path_to(current, selected, tile)
+		# An empty path is a legal no-op to the server: it would mark the unit
+		# as moved and silently cost it its turn. If no route was found, the
+		# preview and the rules disagree - say so rather than acting on it.
+		if route.is_empty():
+			push_warning("MatchController: no route to %s for %s" % [tile, _selected_id])
+			action_refused.emit("no_route")
+			return
+		_turns.move_unit(_selected_id, route)
 		return
 
 	# Tapping another of your own ready units switches to it rather than
@@ -269,7 +283,7 @@ func _open_build_menu(tile: Vector2i) -> void:
 
 
 func _on_build_chosen(unit_type: String) -> void:
-	if not _turns.can_act() or _animating:
+	if not _can_order():
 		return
 	_turns.build(unit_type, _build_menu.tile())
 
@@ -286,20 +300,27 @@ func _my_faction() -> String:
 
 ## --- bar actions -------------------------------------------------------
 
+## Every order goes through this. The animation guard belongs here and not
+## just in tap_tile: while a sequence plays the board shows stale positions,
+## and a button press means whatever was true before it started.
+func _can_order() -> bool:
+	return _turns.can_act() and not _animating
+
+
 func _on_capture_pressed() -> void:
-	if _selected_id.is_empty() or not _turns.can_act():
+	if _selected_id.is_empty() or not _can_order():
 		return
 	_turns.capture(_selected_id)
 
 
 func _on_wait_pressed() -> void:
-	if _selected_id.is_empty() or not _turns.can_act():
+	if _selected_id.is_empty() or not _can_order():
 		return
 	_turns.wait_unit(_selected_id)
 
 
 func _on_end_turn_pressed() -> void:
-	if not _turns.can_act():
+	if not _can_order():
 		return
 	_set_selection("")
 	_turns.end_turn()
@@ -312,9 +333,16 @@ func _on_end_turn_pressed() -> void:
 ## animation moves away from. The refresh afterwards is what makes the
 ## result exact - the animation is decoration, the adopted state is truth.
 func _on_action_settled(events: Array) -> void:
+	_settle_generation += 1
+	var generation := _settle_generation
+
 	if _animator != null and not EventAnimator.plan(events).is_empty():
 		_set_animating(true)
 		await _animator.play(events)
+		# A newer update arrived while this was playing. It owns the flag and
+		# the redraw now; clearing them here would re-render mid-animation.
+		if generation != _settle_generation:
+			return
 		_set_animating(false)
 
 	# The selection survives a move so the player can attack or capture with

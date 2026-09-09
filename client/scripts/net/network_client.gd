@@ -89,6 +89,14 @@ func trust_certificate_file(path: String) -> bool:
 
 
 func _open() -> void:
+	# Connecting over a socket that is still live returns ERR_ALREADY_IN_USE
+	# and would arm a reconnect timer while the existing connection quietly
+	# stopped being polled. A fresh peer each time avoids reusing one that is
+	# mid-teardown.
+	if _socket.get_ready_state() != WebSocketPeer.STATE_CLOSED:
+		_socket.close()
+	_socket = WebSocketPeer.new()
+
 	# A pinned certificate only means anything over wss://.
 	var options: TLSOptions = null
 	if ServerUrl.is_secure(server_url) and trusted_certificate != null:
@@ -98,6 +106,12 @@ func _open() -> void:
 	if err != OK:
 		push_warning("Net: connect_to_url(%s) failed: %s" % [server_url, err])
 		_schedule_reconnect()
+		return
+
+	# Record that a connection is in progress. Without this the socket sits
+	# at CLOSED both before and after a failed attempt, so the transition
+	# below never fires and the reconnect loop dies silently.
+	_last_state = WebSocketPeer.STATE_CONNECTING
 
 
 func _process(delta: float) -> void:
@@ -107,6 +121,8 @@ func _process(delta: float) -> void:
 			_open()
 		return
 
+	# Always poll: a socket that is not read is a socket that never reports
+	# it has died.
 	_socket.poll()
 	var state := _socket.get_ready_state()
 
@@ -156,7 +172,9 @@ func _schedule_reconnect() -> void:
 	var index: int = mini(_reconnect_attempt, RECONNECT_DELAYS.size() - 1)
 	_reconnect_timer = float(RECONNECT_DELAYS[index])
 	_reconnect_attempt += 1
-	_last_state = WebSocketPeer.STATE_CLOSED
+	# _last_state is deliberately left alone. Forcing it to CLOSED here made
+	# the next failed attempt indistinguishable from the previous one, so no
+	# transition fired and nothing ever scheduled another try.
 
 
 func _send(message: Dictionary) -> void:
@@ -212,7 +230,9 @@ func create_match(map_id: String, faction: String) -> void:
 
 
 func join_match(match_id: String, faction: String) -> void:
-	current_match_id = match_id
+	# Not recorded until the server actually seats us. A refused join used to
+	# leave this set, and every later reconnect asked to rejoin a match we
+	# were never in.
 	_send({"t": "joinMatch", "matchId": match_id, "faction": faction})
 
 
