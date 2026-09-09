@@ -29,7 +29,8 @@ import {
 export type AuthFailure =
   | "invalid_player_id"
   | "invalid_token"
-  | "auth_failed";
+  | "auth_failed"
+  | "rate_limited";
 
 export type AuthResult =
   | { ok: true; playerId: string; registered: boolean }
@@ -38,13 +39,23 @@ export type AuthResult =
 export class AuthService {
   constructor(private readonly store: CredentialStore) {}
 
-  async authenticate(playerId: unknown, token: unknown): Promise<AuthResult> {
+  /**
+   * `canRegister` gates creating a NEW identity, which writes a file. It is
+   * asked only when the id is actually unknown, so a returning player is
+   * never turned away by a registration budget they are not spending.
+   */
+  async authenticate(
+    playerId: unknown,
+    token: unknown,
+    canRegister: () => boolean = () => true,
+  ): Promise<AuthResult> {
     if (!isValidPlayerId(playerId)) return { ok: false, reason: "invalid_player_id" };
     if (!isValidToken(token)) return { ok: false, reason: "invalid_token" };
 
     const existing = await this.store.find(playerId);
 
     if (existing === null) {
+      if (!canRegister()) return { ok: false, reason: "rate_limited" };
       const salt = newSalt();
       await this.store.save({
         playerId,

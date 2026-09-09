@@ -44,7 +44,16 @@ process.on("unhandledRejection", (reason) => {
   console.error("[server] unhandled rejection (this is a bug, continuing)", reason);
 });
 process.on("uncaughtException", (err) => {
-  console.error("[server] uncaught exception (this is a bug, exiting)", err);
+  // Written synchronously: console.error followed by process.exit truncates
+  // a piped stderr, which is where this lands under Docker or systemd -
+  // precisely when the diagnostic matters most.
+  try {
+    fs.writeSync(2, `[server] uncaught exception (this is a bug, exiting)\n${err?.stack ?? err}\n`);
+  } catch {
+    // Nothing useful to do if even stderr is gone.
+  }
+  // Safe to exit immediately: writeSync has already flushed, so nothing is
+  // lost the way it would be with console.error followed by exit().
   process.exit(1);
 });
 
@@ -69,8 +78,20 @@ const httpServer = terminatesTls(tls)
       app,
     )
   : http.createServer(app);
-const matches = new MatchService(new FileMatchStore(path.join(stateDir, "matches")));
-const auth = new AuthService(new FileCredentialStore(path.join(stateDir, "credentials")));
+const matchStore = new FileMatchStore(path.join(stateDir, "matches"));
+const credentialStore = new FileCredentialStore(path.join(stateDir, "credentials"));
+const matches = new MatchService(matchStore);
+const auth = new AuthService(credentialStore);
+
+// A crash between write and rename leaves a temp file nothing would ever
+// remove. Startup is the one moment when no write is in flight.
+void Promise.all([
+  matchStore.cleanOrphanedTempFiles(),
+  credentialStore.cleanOrphanedTempFiles(),
+]).then(([staleMatches, staleCredentials]) => {
+  const total = staleMatches + staleCredentials;
+  if (total > 0) console.log(`Cleaned ${total} orphaned temp file(s) from a previous crash`);
+}).catch((err) => console.warn("[server] could not clean temp files", err));
 const limiter = new RateLimiter(readRateLimits());
 attachGameServer(httpServer, matches, auth, tls, limiter);
 

@@ -41,15 +41,37 @@ export class MatchService {
    * the newer state.
    */
   private readonly writes = new Map<string, Promise<void>>();
+  /**
+   * Loads in flight, so two concurrent cache misses for one match share a
+   * single read and a single state object. Without this they each build a
+   * separate copy, and whichever commits last silently discards the other's
+   * turn - a real possibility on the first requests after a restart.
+   */
+  private readonly loads = new Map<string, Promise<MatchState | null>>();
 
   constructor(private readonly store: MatchStore) {}
 
   private async get(matchId: string): Promise<MatchState | null> {
     const cached = this.cache.get(matchId);
     if (cached) return cached;
-    const loaded = await this.store.load(matchId);
-    if (loaded) this.cache.set(matchId, loaded);
-    return loaded;
+
+    const inFlight = this.loads.get(matchId);
+    if (inFlight) return inFlight;
+
+    const load = this.store
+      .load(matchId)
+      .then((loaded) => {
+        // Another caller may have cached it while this read was in flight;
+        // theirs wins, so everyone ends up on the same object.
+        const existing = this.cache.get(matchId);
+        if (existing) return existing;
+        if (loaded) this.cache.set(matchId, loaded);
+        return loaded;
+      })
+      .finally(() => this.loads.delete(matchId));
+
+    this.loads.set(matchId, load);
+    return load;
   }
 
   private async commit(state: MatchState): Promise<void> {

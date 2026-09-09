@@ -33,6 +33,17 @@ export interface RateLimitSettings {
   newConnectionsPerMinute: number;
   /** Matches one player may create per minute. */
   matchesPerMinute: number;
+  /** New device identities one address may register per minute. */
+  registrationsPerMinute: number;
+  /**
+   * Messages one socket may send before authenticating. Held on the session
+   * rather than in a registry: behind a proxy every connection looks like it
+   * came from loopback, so an address-keyed pre-auth budget would let one
+   * client's handshake burst strand everybody else's.
+   */
+  handshakeBurst: number;
+  /** How long a socket may stay connected without authenticating. */
+  authDeadlineMs: number;
   /** Largest frame `ws` will accept at all. */
   maxPayloadBytes: number;
   /** Distinct keys any one registry will track before refusing new ones. */
@@ -49,6 +60,9 @@ export const DEFAULT_RATE_LIMITS: RateLimitSettings = {
   connectionsPerIp: 12,
   newConnectionsPerMinute: 60,
   matchesPerMinute: 10,
+  registrationsPerMinute: 20,
+  handshakeBurst: 8,
+  authDeadlineMs: 20_000,
   maxPayloadBytes: 64 * 1024,
   maxTrackedKeys: 10_000,
 };
@@ -59,17 +73,36 @@ function positiveInt(raw: string | undefined, fallback: number): number {
 }
 
 export function readRateLimits(env: NodeJS.ProcessEnv = process.env): RateLimitSettings {
+  const messagesPerSecond = positiveInt(
+    env.REDLINE_MESSAGES_PER_SECOND, DEFAULT_RATE_LIMITS.messagesPerSecond);
+
   return {
-    ...DEFAULT_RATE_LIMITS,
     // Disabling is explicit and total - there is no half-limited mode to
     // reason about.
     enabled: env.REDLINE_DISABLE_RATE_LIMIT !== "1",
-    messagesPerSecond: positiveInt(
-      env.REDLINE_MESSAGES_PER_SECOND, DEFAULT_RATE_LIMITS.messagesPerSecond),
+    messagesPerSecond,
+    // The burst tracks the rate unless it is set outright. Lowering the rate
+    // while leaving a burst of 30 in place would let through exactly the
+    // flood the lowered rate was meant to stop.
+    messageBurst: positiveInt(env.REDLINE_MESSAGE_BURST, messagesPerSecond * 3),
+    maxMessageViolations: positiveInt(
+      env.REDLINE_MAX_MESSAGE_VIOLATIONS, DEFAULT_RATE_LIMITS.maxMessageViolations),
     connectionsPerIp: positiveInt(
       env.REDLINE_CONNECTIONS_PER_IP, DEFAULT_RATE_LIMITS.connectionsPerIp),
+    newConnectionsPerMinute: positiveInt(
+      env.REDLINE_NEW_CONNECTIONS_PER_MINUTE, DEFAULT_RATE_LIMITS.newConnectionsPerMinute),
+    matchesPerMinute: positiveInt(
+      env.REDLINE_MATCHES_PER_MINUTE, DEFAULT_RATE_LIMITS.matchesPerMinute),
+    registrationsPerMinute: positiveInt(
+      env.REDLINE_REGISTRATIONS_PER_MINUTE, DEFAULT_RATE_LIMITS.registrationsPerMinute),
     maxPayloadBytes: positiveInt(
       env.REDLINE_MAX_PAYLOAD_BYTES, DEFAULT_RATE_LIMITS.maxPayloadBytes),
+    maxTrackedKeys: positiveInt(
+      env.REDLINE_MAX_TRACKED_KEYS, DEFAULT_RATE_LIMITS.maxTrackedKeys),
+    handshakeBurst: positiveInt(
+      env.REDLINE_HANDSHAKE_BURST, DEFAULT_RATE_LIMITS.handshakeBurst),
+    authDeadlineMs: positiveInt(
+      env.REDLINE_AUTH_DEADLINE_MS, DEFAULT_RATE_LIMITS.authDeadlineMs),
   };
 }
 
@@ -217,6 +250,7 @@ export class RateLimiter {
   readonly messages: BucketRegistry;
   readonly newConnections: BucketRegistry;
   readonly matchCreation: BucketRegistry;
+  readonly registrations: BucketRegistry;
   readonly concurrent: ConnectionCounter;
 
   constructor(readonly settings: RateLimitSettings) {
@@ -227,6 +261,9 @@ export class RateLimiter {
       settings.maxTrackedKeys);
     this.matchCreation = new BucketRegistry(
       settings.matchesPerMinute, settings.matchesPerMinute / 60, settings.maxTrackedKeys);
+    this.registrations = new BucketRegistry(
+      settings.registrationsPerMinute, settings.registrationsPerMinute / 60,
+      settings.maxTrackedKeys);
     this.concurrent = new ConnectionCounter(settings.connectionsPerIp, settings.maxTrackedKeys);
   }
 
@@ -255,11 +292,26 @@ export class RateLimiter {
     return this.allow(() => this.matchCreation.tryConsume(playerId, now));
   }
 
+  /**
+   * Registering an identity writes a credential file, so it needs its own
+   * budget - otherwise one socket can fill the credential store at whatever
+   * the message rate allows.
+   */
+  allowRegistration(address: string, now: number): boolean {
+    return this.allow(() => this.registrations.tryConsume(address, now));
+  }
+
+  /** A fresh pre-auth budget for one socket. Dies with the connection. */
+  newHandshakeBucket(now: number): TokenBucket {
+    return new TokenBucket(this.settings.handshakeBurst, 1, now);
+  }
+
   /** Called periodically so idle keys do not accumulate on a quiet server. */
   sweep(now: number): void {
     this.messages.sweep(now);
     this.newConnections.sweep(now);
     this.matchCreation.sweep(now);
+    this.registrations.sweep(now);
   }
 
   describe(): string {

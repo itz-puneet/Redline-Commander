@@ -57,6 +57,23 @@ export class FileCredentialStore implements CredentialStore {
 
   async count(): Promise<number> {
     const files = await fs.promises.readdir(this.dir).catch(() => [] as string[]);
-    return files.filter((f) => f.endsWith(".json") && !f.includes(".tmp")).length;
+    return files.filter((f) => f.endsWith(".json")).length;
   }
+
+  /**
+   * Removes temp files left behind by a crash between write and rename.
+   * Without this they accumulate forever - the `.json` filter never saw them,
+   * so nothing noticed. Called once at startup, when nothing is mid-write.
+   */
+  async cleanOrphanedTempFiles(): Promise<number> {
+    const files = await fs.promises.readdir(this.dir).catch(() => [] as string[]);
+    let removed = 0;
+    for (const file of files) {
+      if (!file.endsWith(".tmp")) continue;
+      await fs.promises.rm(path.join(this.dir, file), { force: true });
+      removed += 1;
+    }
+    return removed;
+  }
+
 }

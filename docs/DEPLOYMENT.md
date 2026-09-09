@@ -125,8 +125,16 @@ thing TLS was protecting.
 | `REDLINE_TRUST_PROXY` | unset | Believe `X-Forwarded-Proto` from loopback (Option A) |
 | `REDLINE_ALLOW_INSECURE` | unset | Serve plaintext to remote hosts. Leaks device secrets. |
 | `REDLINE_MESSAGES_PER_SECOND` | `10` | Sustained message rate per player |
+| `REDLINE_MESSAGE_BURST` | 3x the rate | Messages allowed in one instant |
+| `REDLINE_MAX_MESSAGE_VIOLATIONS` | `20` | Refusals before the socket is closed |
 | `REDLINE_CONNECTIONS_PER_IP` | `12` | Concurrent sockets from one address |
+| `REDLINE_NEW_CONNECTIONS_PER_MINUTE` | `60` | New sockets per minute per address |
+| `REDLINE_MATCHES_PER_MINUTE` | `10` | Matches one player may create |
+| `REDLINE_REGISTRATIONS_PER_MINUTE` | `20` | New identities one address may register |
+| `REDLINE_HANDSHAKE_BURST` | `8` | Messages a socket may send before authenticating |
+| `REDLINE_AUTH_DEADLINE_MS` | `20000` | How long a socket may stay unauthenticated |
 | `REDLINE_MAX_PAYLOAD_BYTES` | `65536` | Largest frame accepted at all |
+| `REDLINE_MAX_TRACKED_KEYS` | `10000` | Distinct keys any one limiter tracks |
 | `REDLINE_DISABLE_RATE_LIMIT` | unset | Turn limiting off entirely |
 
 Only an exact `1` enables the flags; `true` and `yes` do not. A nonsensical
@@ -143,7 +151,18 @@ ordinary play never comes near them:
 - **New connections and concurrent sockets per address** — 60/minute and 12
   at once.
 - **Match creation** — 10/minute per player. Each match is a file on disk.
+- **Identity registration** — 20/minute per address. Each one is a file too.
 - **Frame size** — 64 KiB. An action is a few hundred bytes.
+
+Lowering `REDLINE_MESSAGES_PER_SECOND` lowers the burst with it unless
+`REDLINE_MESSAGE_BURST` is set outright — otherwise a lowered rate would
+still admit a burst of the old size, which is the flood it was set to stop.
+
+A socket that has not authenticated within `REDLINE_AUTH_DEADLINE_MS` is
+closed. Pre-authentication messages come from a small budget belonging to
+that socket alone, not to its address: behind a proxy every connection
+appears to come from loopback, and an address-keyed budget there would let
+one client's handshake burst strand everybody else's.
 
 **Behind a reverse proxy every connection appears to come from loopback**, so
 the per-address limits become a bound on total load rather than per-attacker.

@@ -10,10 +10,12 @@ import { decode, encode, PROTOCOL_VERSION, type ServerMessage } from "./protocol
 import type { MatchService, Delivery } from "../match/MatchService";
 import type { AuthService } from "../auth/AuthService";
 import { judgeConnection, type TlsSettings } from "./tls";
-import type { RateLimiter } from "./rate_limit";
+import type { RateLimiter, TokenBucket } from "./rate_limit";
 
 const SERVER_VERSION = "0.2.0";
 const HEARTBEAT_MS = 30_000;
+/** The unauthenticated sweep runs on its own, faster, timer. */
+const AUTH_SWEEP_MS = 1_000;
 
 interface Session {
   socket: WebSocket;
@@ -26,6 +28,15 @@ interface Session {
   address: string;
   /** Refused messages so far; enough of them and the socket is closed. */
   rateViolations: number;
+  /** When this socket connected, for the authentication deadline. */
+  connectedAt: number;
+  /**
+   * Pre-authentication message budget, per socket rather than per address:
+   * behind a proxy every connection appears to come from loopback, so an
+   * address-keyed budget would let one client's handshake burst strand
+   * everyone else's.
+   */
+  handshake: TokenBucket;
   /**
    * Messages from one connection are handled strictly in order.
    *
@@ -46,6 +57,13 @@ const CLOSE_INSECURE = 4002;
 const CLOSE_RATE_LIMITED = 4003;
 /** How often idle rate-limit keys are swept. */
 const SWEEP_MS = 60_000;
+/**
+ * A socket that has not authenticated is checked against
+ * `settings.authDeadlineMs`. Without a deadline, anything that stops a client
+ * completing the handshake - a rate-limited `hello`, a client that connects
+ * and says nothing - leaves a socket held open forever, since only
+ * authenticated sessions were ever reaped.
+ */
 const MAX_AUTH_ATTEMPTS = 3;
 
 export function attachGameServer(
@@ -65,6 +83,13 @@ export function attachGameServer(
   /** playerId -> session. One live connection per player; a second login
    *  displaces the first rather than duplicating a seat. */
   const sessions = new Map<string, Session>();
+  /**
+   * Every live connection, authenticated or not. The heartbeat used to find
+   * sessions by scanning `sessions`, which meant an unauthenticated socket
+   * was never pinged and never reaped - and made the sweep O(sockets x
+   * sessions) besides.
+   */
+  const liveSessions = new Set<Session>();
 
   function send(socket: WebSocket, message: ServerMessage): void {
     if (socket.readyState === WebSocket.OPEN) socket.send(encode(message));
@@ -136,9 +161,11 @@ export function attachGameServer(
 
     const session: Session = {
       socket, playerId: null, matchId: null, alive: true, authAttempts: 0,
-      address, rateViolations: 0,
+      address, rateViolations: 0, connectedAt: now,
+      handshake: limiter.newHandshakeBucket(now),
       queue: Promise.resolve(),
     };
+    liveSessions.add(session);
 
     socket.on("pong", () => {
       session.alive = true;
@@ -146,10 +173,21 @@ export function attachGameServer(
 
     socket.on("message", (raw) => {
       // Metered before queueing, so a flood cannot pile up work behind the
-      // queue faster than it drains. The key is the identity once known, so
-      // opening fresh sockets does not buy a fresh allowance.
-      const key = session.playerId ?? `addr:${session.address}`;
-      if (!limiter.allowMessage(key, Date.now())) {
+      // queue faster than it drains.
+      const at = Date.now();
+
+      if (session.playerId === null) {
+        // Pre-auth, from this socket's own small budget. Exhausting it closes
+        // the connection rather than dropping the frame: a client only sends
+        // `hello` once, so a dropped one strands the socket forever.
+        if (!session.handshake.tryConsume(at)) {
+          send(socket, { t: "error", code: "rate_limited" });
+          socket.close(CLOSE_RATE_LIMITED, "handshake_rate_limited");
+          return;
+        }
+      } else if (!limiter.allowMessage(session.playerId, at)) {
+        // Post-auth the frame is dropped rather than the connection closed,
+        // so a burst mid-turn does not cost a player their match.
         session.rateViolations += 1;
         send(socket, { t: "error", code: "rate_limited" });
         if (session.rateViolations >= limiter.settings.maxMessageViolations) {
@@ -157,6 +195,7 @@ export function attachGameServer(
         }
         return;
       }
+
       session.queue = session.queue.then(() => handleMessage(raw.toString()));
     });
 
@@ -172,10 +211,22 @@ export function attachGameServer(
       try {
         switch (message.t) {
           case "hello": {
+            // One identity per socket. Re-authenticating as a second player
+            // would leave the first mapped to this session with nothing to
+            // remove it on close, leaking an entry per `hello`.
+            if (session.playerId !== null) {
+              return send(socket, { t: "error", code: "already_authenticated" });
+            }
+
             // Nothing is trusted until this passes: not the id, and not the
             // seat it would claim. The token never reaches a log.
             session.authAttempts += 1;
-            const result = await auth.authenticate(message.playerId, message.token);
+            const result = await auth.authenticate(
+              message.playerId,
+              message.token,
+              // Registering writes a file, so it gets its own budget.
+              () => limiter.allowRegistration(session.address, Date.now()),
+            );
 
             if (!result.ok) {
               send(socket, { t: "error", code: result.reason });
@@ -188,7 +239,7 @@ export function attachGameServer(
             // Only now may this connection take over the id. A second device
             // logging in displaces the first rather than sharing the seat.
             const previous = sessions.get(result.playerId);
-            if (previous !== undefined && previous !== session) {
+            if (previous !== undefined) {
               previous.socket.close(CLOSE_REPLACED, "replaced_by_new_connection");
             }
             session.playerId = result.playerId;
@@ -252,6 +303,7 @@ export function attachGameServer(
     }
 
     socket.on("close", () => {
+      liveSessions.delete(session);
       limiter.releaseSocket(session.address);
       if (!session.playerId) return;
       if (sessions.get(session.playerId) === session) sessions.delete(session.playerId);
@@ -272,21 +324,35 @@ export function attachGameServer(
   const sweeper = setInterval(() => limiter.sweep(Date.now()), SWEEP_MS);
   sweeper.unref?.();
 
+  // Sockets that never got as far as authenticating are reaped on their own
+  // timer: the deadline is short, and tying it to the 30s heartbeat would
+  // make the effective deadline anywhere from the deadline to 30s past it.
+  const authSweeper = setInterval(() => {
+    const now = Date.now();
+    for (const session of liveSessions) {
+      if (session.playerId === null
+          && now - session.connectedAt > limiter.settings.authDeadlineMs) {
+        session.socket.close(CLOSE_AUTH_FAILED, "authentication_timeout");
+      }
+    }
+  }, AUTH_SWEEP_MS);
+  authSweeper.unref?.();
+
   // Drop half-open connections so a player's seat is not held by a dead socket.
   const heartbeat = setInterval(() => {
-    for (const socket of wss.clients) {
-      const session = [...sessions.values()].find((s) => s.socket === socket);
-      if (session && !session.alive) {
-        socket.terminate();
+    for (const session of liveSessions) {
+      if (!session.alive) {
+        session.socket.terminate();
         continue;
       }
-      if (session) session.alive = false;
-      socket.ping();
+      session.alive = false;
+      session.socket.ping();
     }
   }, HEARTBEAT_MS);
   wss.on("close", () => {
     clearInterval(heartbeat);
     clearInterval(sweeper);
+    clearInterval(authSweeper);
   });
 
   return wss;

@@ -184,3 +184,40 @@ test("the store refuses to build a path from a bad id", () => {
   const store = new FileCredentialStore(dir);
   assert.rejects(() => store.find("../../etc/passwd"));
 });
+
+/* ---------------- registration budget (review follow-up) ---------- */
+
+test("registering a new identity can be refused without touching the store", async () => {
+  const { store } = tempStore();
+  const auth = new AuthService(store);
+
+  const refused = await auth.authenticate("brand-new-one", GOOD_TOKEN, () => false);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.ok === false && refused.reason, "rate_limited");
+  assert.equal(await store.count(), 0, "a refused registration must not write a file");
+});
+
+test("a returning player is never charged the registration budget", async () => {
+  const { store } = tempStore();
+  const auth = new AuthService(store);
+  await auth.authenticate("already-here", GOOD_TOKEN);
+
+  // canRegister returns false, but this id exists, so it is never consulted.
+  let asked = false;
+  const login = await auth.authenticate("already-here", GOOD_TOKEN, () => {
+    asked = true;
+    return false;
+  });
+  assert.ok(login.ok, "an existing player must log in regardless of the budget");
+  assert.equal(asked, false, "the budget is only for identities that do not exist");
+});
+
+test("a wrong token on a known id is still auth_failed, not rate_limited", async () => {
+  const { store } = tempStore();
+  const auth = new AuthService(store);
+  await auth.authenticate("known-player", GOOD_TOKEN);
+
+  const impostor = await auth.authenticate("known-player", OTHER_TOKEN, () => false);
+  assert.equal(impostor.ok === false && impostor.reason, "auth_failed",
+    "the budget must not become a way to probe which ids exist");
+});

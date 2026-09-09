@@ -109,6 +109,15 @@ immediately.
 Frames larger than 64 KiB are refused by the transport and close the
 connection with the standard code `1009`.
 
+Before authentication the budget is smaller and belongs to the socket rather
+than the address, and exceeding it **closes** the connection rather than
+dropping the frame — a client sends `hello` once, so a dropped one would
+leave it connected with no way to recover. A socket that has not
+authenticated within 20 seconds is closed with code `4001`.
+
+A second `hello` on an already-authenticated socket is refused with
+`already_authenticated`; one connection carries one identity.
+
 Ordinary play is nowhere near these limits — see `docs/DEPLOYMENT.md` for the
 numbers and how to tune them.
 
@@ -128,6 +137,7 @@ tile_does_not_build        tile_not_yours             wrong_production_building
 tile_occupied              insufficient_funds
 match_not_started          match_finished             player_defeated
 no_such_match              not_in_this_match          match_full
+already_authenticated      rate_limited               insecure_transport
 ```
 
 ## Reconnection

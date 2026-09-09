@@ -241,3 +241,74 @@ test("the posture describes the actual numbers", () => {
   assert.match(description, /7\/s/);
   assert.match(description, /3 sockets/);
 });
+
+/* ------------------ settings coverage (review follow-up) ---------- */
+
+test("every setting is readable from the environment", () => {
+  const settings = readRateLimits({
+    REDLINE_MESSAGES_PER_SECOND: "5",
+    REDLINE_MESSAGE_BURST: "7",
+    REDLINE_MAX_MESSAGE_VIOLATIONS: "3",
+    REDLINE_CONNECTIONS_PER_IP: "4",
+    REDLINE_NEW_CONNECTIONS_PER_MINUTE: "11",
+    REDLINE_MATCHES_PER_MINUTE: "2",
+    REDLINE_REGISTRATIONS_PER_MINUTE: "6",
+    REDLINE_MAX_PAYLOAD_BYTES: "1234",
+    REDLINE_MAX_TRACKED_KEYS: "99",
+    REDLINE_HANDSHAKE_BURST: "3",
+    REDLINE_AUTH_DEADLINE_MS: "5000",
+  });
+  assert.deepEqual(settings, {
+    enabled: true,
+    messagesPerSecond: 5,
+    messageBurst: 7,
+    maxMessageViolations: 3,
+    connectionsPerIp: 4,
+    newConnectionsPerMinute: 11,
+    matchesPerMinute: 2,
+    registrationsPerMinute: 6,
+    maxPayloadBytes: 1234,
+    maxTrackedKeys: 99,
+    handshakeBurst: 3,
+    authDeadlineMs: 5000,
+  });
+});
+
+test("lowering the rate lowers the burst with it", () => {
+  // Otherwise a lowered rate still lets through a burst of the old size,
+  // which is exactly the flood it was set to prevent.
+  const strict = readRateLimits({ REDLINE_MESSAGES_PER_SECOND: "2" });
+  assert.equal(strict.messagesPerSecond, 2);
+  assert.ok(strict.messageBurst <= 6, `burst was ${strict.messageBurst}`);
+
+  // Unless it is set outright.
+  const explicit = readRateLimits({
+    REDLINE_MESSAGES_PER_SECOND: "2", REDLINE_MESSAGE_BURST: "50",
+  });
+  assert.equal(explicit.messageBurst, 50);
+});
+
+test("registration has a budget of its own", () => {
+  const rl = limiter({ registrationsPerMinute: 3 });
+  for (let i = 0; i < 3; i++) {
+    assert.equal(rl.allowRegistration("1.2.3.4", T0), true);
+  }
+  assert.equal(rl.allowRegistration("1.2.3.4", T0), false,
+    "an unbounded registration rate fills the credential store");
+  assert.equal(rl.allowRegistration("5.6.7.8", T0), true, "keyed per address");
+  assert.equal(rl.allowMessage("1.2.3.4", T0), true, "ordinary messages are unaffected");
+});
+
+test("a handshake budget belongs to one socket, not one address", () => {
+  const rl = limiter({ handshakeBurst: 2 });
+  // Two sockets from the same address each get their own - behind a proxy
+  // they all look like loopback, and a shared budget would let one client's
+  // handshake burst strand everyone else.
+  const first = rl.newHandshakeBucket(T0);
+  const second = rl.newHandshakeBucket(T0);
+
+  assert.equal(first.tryConsume(T0), true);
+  assert.equal(first.tryConsume(T0), true);
+  assert.equal(first.tryConsume(T0), false);
+  assert.equal(second.tryConsume(T0), true, "a second socket is unaffected");
+});

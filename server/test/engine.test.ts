@@ -494,3 +494,65 @@ test("concurrent saves of one match do not collide", async () => {
   const listed = await store.listActive();
   assert.deepEqual(listed, [state.matchId], `listed ${JSON.stringify(listed)}`);
 });
+
+/**
+ * Two concurrent cache misses for one match used to each build their own
+ * state object, and whichever committed last discarded the other's turn -
+ * possible on the first requests after a restart, when the cache is cold.
+ */
+test("concurrent first reads of a match share one state object", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const nodePath = await import("node:path");
+  const { FileMatchStore } = await import("../src/match/MatchStore");
+  const { MatchService } = await import("../src/match/MatchService");
+
+  const dir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "redline-dedup-"));
+  const store = new FileMatchStore(dir);
+
+  // Seed a started match, then use a cold service, as after a restart.
+  const seeded = startedMatch();
+  await store.save(seeded);
+
+  let loads = 0;
+  const countingStore = {
+    load: (id: string) => { loads += 1; return store.load(id); },
+    save: (state: typeof seeded) => store.save(state),
+    delete: (id: string) => store.delete(id),
+    listActive: () => store.listActive(),
+  };
+  const service = new MatchService(countingStore);
+
+  // Two requests arriving together, both missing the cache.
+  const [a, b] = await Promise.all([
+    service.rejoin("player-one", seeded.matchId),
+    service.rejoin("player-two", seeded.matchId),
+  ]);
+  assert.ok(a.ok && b.ok);
+  assert.equal(loads, 1, "a concurrent miss must not load the match twice");
+
+  // Both views describe the same match at the same version.
+  assert.equal(a.deliveries[0].view.version, b.deliveries[0].view.version);
+});
+
+test("orphaned temp files are cleaned up rather than accumulating", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const nodePath = await import("node:path");
+  const { FileMatchStore } = await import("../src/match/MatchStore");
+
+  const dir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "redline-orphan-"));
+  const store = new FileMatchStore(dir);
+  await store.save(startedMatch());
+
+  // What a crash between write and rename leaves behind.
+  fs.writeFileSync(nodePath.join(dir, "abandoned.deadbeef.tmp"), "{}");
+  fs.writeFileSync(nodePath.join(dir, "another.cafebabe.tmp"), "{}");
+
+  assert.equal(await store.cleanOrphanedTempFiles(), 2);
+  assert.equal(await store.cleanOrphanedTempFiles(), 0, "cleaning is idempotent");
+
+  const remaining = fs.readdirSync(dir);
+  assert.equal(remaining.length, 1, `left ${JSON.stringify(remaining)}`);
+  assert.ok(remaining[0].endsWith(".json"), "the real match must survive");
+});

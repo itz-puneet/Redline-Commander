@@ -120,6 +120,34 @@ const send = (ws, message) => ws.send(JSON.stringify(message));
   const closeCode = await Promise.race([closed, wait(1500).then(() => "never closed")]);
   check("an oversized frame closes the connection", closeCode, 1009);
 
+  // A rate-limited handshake must CLOSE the socket, not drop the frame: a
+  // client sends `hello` once, so a dropped one leaves it connected forever
+  // with no way to recover.
+  const chatty = new WebSocket(URL);
+  chatty.inbox = [];
+  chatty.on("message", (data) => chatty.inbox.push(JSON.parse(data.toString())));
+  await new Promise((resolve) => chatty.on("open", resolve));
+  const chattyClosed = new Promise((resolve) => chatty.on("close", (code) => resolve(code)));
+  for (let i = 0; i < 30; i += 1) {
+    chatty.send(JSON.stringify({ t: "ping" }));
+  }
+  check("a pre-auth flood closes the socket rather than stranding it",
+    await Promise.race([chattyClosed, wait(2000).then(() => "never closed")]), 4003);
+
+  // One identity per socket. A second hello used to leave the first player
+  // mapped to this session with nothing to remove it on close.
+  const doubled = await open("smoke-twice");
+  await wait(200);
+  check("the first hello is welcomed", last(doubled, "welcome") !== undefined, true);
+  doubled.send(JSON.stringify({
+    t: "hello", playerId: "smoke-other", token: tokenFor("smoke-other"), clientVersion: "0.2.0",
+  }));
+  await wait(250);
+  check("a second hello on the same socket is refused",
+    last(doubled, "error")?.code, "already_authenticated");
+  doubled.close();
+  await wait(100);
+
   const a = await open("smoke-alice");
   const b = await open("smoke-bob");
   await wait(200);
