@@ -100,6 +100,13 @@ it; nothing else changes.
 A thin `ws` server. Parses a frame, calls `MatchService`, writes the results
 back. It contains no game rules at all.
 
+`net/tls.ts` decides whether a connection is allowed at all, before a single
+frame is read: encrypted, or forwarded as encrypted by a trusted local proxy,
+or loopback. Anything else is refused, because the client's first frame
+carries its secret. The policy is a pure function of the connection's facts
+and the configured settings, so it is tested directly rather than by standing
+up servers with certificates. `docs/DEPLOYMENT.md` has the deployment shapes.
+
 Messages from one connection are chained onto a per-session promise so they
 are handled in order. `ws` calls the handler again as soon as the previous
 call *returns*, not when its promise settles — so the moment any handler

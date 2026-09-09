@@ -34,6 +34,16 @@ func _ready() -> void:
 	# Start clean so the lobby offers a join rather than a stale rejoin.
 	Session.forget_match()
 
+	# A self-signed dev certificate is trusted only if we are handed it; a
+	# real deployment uses a CA-signed one and needs none of this.
+	var ca_path := OS.get_environment("REDLINE_TLS_CA").strip_edges()
+	if not ca_path.is_empty():
+		if not Net.trust_certificate_file(ca_path):
+			printerr("live_check: could not load the certificate at %s" % ca_path)
+			get_tree().quit(1)
+			return
+		print("live_check: trusting the certificate at %s" % ca_path)
+
 	_app = MAIN_SCENE.instantiate()
 	add_child(_app)
 	await get_tree().process_frame
@@ -44,6 +54,13 @@ func _ready() -> void:
 		return
 	_check("the app connects to a real server", true)
 	_check("and opens on the lobby", _app.current_screen() == "lobby")
+
+	# When the run is over TLS, say so - a green suite that silently fell
+	# back to plaintext would prove the opposite of what it claims.
+	var expected_url := OS.get_environment("REDLINE_SERVER_URL").strip_edges()
+	if expected_url.begins_with("wss://"):
+		_check("the connection is encrypted", ServerUrl.is_secure(Net.server_url),
+			"connected to %s" % Net.server_url)
 
 	await _join_through_the_lobby(code)
 

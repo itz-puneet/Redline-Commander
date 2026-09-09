@@ -28,14 +28,21 @@ const RECONNECT_DELAYS := [1.0, 2.0, 4.0, 8.0, 15.0]
 
 ## Server errors that reconnecting cannot fix. Retrying these would spin
 ## forever against a server that has already made up its mind.
-const FATAL_ERROR_CODES := ["auth_failed", "invalid_player_id", "invalid_token"]
+const FATAL_ERROR_CODES := [
+	"auth_failed", "invalid_player_id", "invalid_token", "insecure_transport",
+]
 
 ## Close codes the server uses deliberately (server/src/net/server.ts).
 const CLOSE_REPLACED := 4000
 const CLOSE_AUTH_FAILED := 4001
+const CLOSE_INSECURE := 4002
 
 var server_url: String = "ws://localhost:2567/play"
 var current_match_id: String = ""
+
+## A certificate to trust in addition to the system store, for a server using
+## a self-signed cert on a home network. Leave null for a real certificate.
+var trusted_certificate: X509Certificate = null
 
 var _socket := WebSocketPeer.new()
 var _last_state := WebSocketPeer.STATE_CLOSED
@@ -68,8 +75,25 @@ func disconnect_from_server() -> void:
 	_socket.close()
 
 
+## Trust a specific certificate file, for a self-signed server. Returns
+## false if it cannot be read, so a typo in the path is not mistaken for a
+## certificate problem later.
+func trust_certificate_file(path: String) -> bool:
+	var certificate := X509Certificate.new()
+	if certificate.load(path) != OK:
+		push_warning("Net: could not load certificate %s" % path)
+		return false
+	trusted_certificate = certificate
+	return true
+
+
 func _open() -> void:
-	var err := _socket.connect_to_url(server_url)
+	# A pinned certificate only means anything over wss://.
+	var options: TLSOptions = null
+	if ServerUrl.is_secure(server_url) and trusted_certificate != null:
+		options = TLSOptions.client(trusted_certificate)
+
+	var err := _socket.connect_to_url(server_url, options)
 	if err != OK:
 		push_warning("Net: connect_to_url(%s) failed: %s" % [server_url, err])
 		_schedule_reconnect()
@@ -99,7 +123,7 @@ func _process(delta: float) -> void:
 		if close_code == CLOSE_REPLACED:
 			_want_connection = false
 			replaced_by_other_device.emit()
-		elif close_code == CLOSE_AUTH_FAILED:
+		elif close_code == CLOSE_AUTH_FAILED or close_code == CLOSE_INSECURE:
 			_want_connection = false
 
 		if _want_connection:

@@ -76,6 +76,12 @@ layout of the code, so keep them that way.
    traversal is refused at the door. Never add a log line, error message, or
    test fixture that carries a real token.
 
+   That secret travels in the `hello` frame, so the server refuses plaintext
+   connections from anything but loopback (`net/tls.ts`). Do not weaken that
+   default, and do not make the client skip certificate verification to get a
+   self-signed certificate working - both turn a loud failure into a silent
+   leak.
+
 6. **The adopted state is the truth; animation is decoration.** The board
    is not re-rendered until an event animation finishes - that is what
    leaves the old unit positions on screen to animate away from. Every
@@ -96,16 +102,17 @@ with a damage forecast, all validated by the server and verified against a
 real one by `tools/live-check.sh`. Still
 missing before it is a game: art, more maps, and a campaign.
 
-Devices authenticate on connect (trust on first use, see `server/src/auth`).
-A public deployment still needs TLS - `wss://` - because the device secret
-travels in the `hello` frame. See `docs/ROADMAP.md`.
+Devices authenticate on connect (trust on first use, see `server/src/auth`),
+and the server refuses unencrypted connections from anything but loopback.
+`docs/DEPLOYMENT.md` covers running it for real.
 
 ## Where to start
 
 1. `docs/ARCHITECTURE.md` — layering, message flow, and *why* it is shaped this way.
 2. `docs/GAME_DESIGN.md` — factions, units, terrain, combat rules.
 3. `docs/PROTOCOL.md` — the exact client/server wire contract.
-4. `docs/ROADMAP.md` — pick up the next unchecked item.
+4. `docs/DEPLOYMENT.md` — TLS, environment variables, running it for real.
+5. `docs/ROADMAP.md` — pick up the next unchecked item.
 
 ## Commands
 
@@ -135,6 +142,8 @@ xvfb-run -a godot --resolution 1280x720 res://tests/build_preview.tscn
 
 # End to end against a real server: builds, hosts a match, runs the client.
 tools/live-check.sh
+tools/live-check.sh --tls   # the same, over wss:// with a generated cert
+tools/dev-cert.sh           # a self-signed cert for local wss:// testing
 ```
 
 Two Godot gotchas worth knowing:

@@ -7,11 +7,21 @@
 # Everything else in the test suites runs offline against fixtures. This is
 # the one that proves the pieces fit together.
 #
-#   tools/live-check.sh
+#   tools/live-check.sh          plaintext on loopback
+#   tools/live-check.sh --tls    over wss:// with a generated dev certificate
+#
+# The --tls run is the one that proves the encrypted path end to end: the
+# server terminates TLS, and the real Godot client connects over wss://
+# trusting that certificate.
 #
 # Needs node, and a Godot binary on PATH (or $GODOT). Uses xvfb when there is
 # no display, because the client needs a real renderer.
 set -euo pipefail
+
+use_tls=0
+if [[ "${1:-}" == "--tls" ]]; then
+  use_tls=1
+fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work_dir="$(mktemp -d)"
@@ -45,22 +55,39 @@ echo "== building server =="
 cd "$repo_root/server"
 npm run build --silent
 
-echo "== starting server =="
+scheme="ws"
+health_url="http://localhost:2567/health"
+curl_args=(-sf -m 1)
+
+if [[ "$use_tls" == "1" ]]; then
+  echo "== generating a dev certificate =="
+  "$repo_root/tools/dev-cert.sh" "$work_dir/cert" >/dev/null
+  export REDLINE_TLS_CERT="$work_dir/cert/cert.pem"
+  export REDLINE_TLS_KEY="$work_dir/cert/key.pem"
+  export REDLINE_TLS_CA="$work_dir/cert/cert.pem"
+  scheme="wss"
+  health_url="https://localhost:2567/health"
+  curl_args+=(--cacert "$work_dir/cert/cert.pem")
+fi
+
+echo "== starting server ($scheme) =="
 REDLINE_STATE_DIR="$work_dir/state" node build/src/index.js > "$work_dir/server.log" 2>&1 &
 server_pid=$!
 
 for _ in $(seq 1 40); do
-  if curl -sf -m 1 http://localhost:2567/health >/dev/null 2>&1; then break; fi
+  if curl "${curl_args[@]}" "$health_url" >/dev/null 2>&1; then break; fi
   sleep 0.5
 done
-if ! curl -sf -m 1 http://localhost:2567/health >/dev/null 2>&1; then
+if ! curl "${curl_args[@]}" "$health_url" >/dev/null 2>&1; then
   echo "live-check: server did not come up" >&2
   cat "$work_dir/server.log" >&2
   exit 1
 fi
+grep -E "^Transport:" "$work_dir/server.log" || true
 
 echo "== hosting a match =="
-node scripts/host-match.js "$work_dir/code.txt" > "$work_dir/host.log" 2>&1 &
+REDLINE_URL="$scheme://localhost:2567/play" \
+  node scripts/host-match.js "$work_dir/code.txt" > "$work_dir/host.log" 2>&1 &
 host_pid=$!
 
 for _ in $(seq 1 40); do
@@ -77,6 +104,8 @@ echo "joining $code"
 
 echo "== running the client =="
 cd "$repo_root/client"
-REDLINE_JOIN_CODE="$code" "${runner[@]}" --resolution 1280x720 \
+REDLINE_JOIN_CODE="$code" \
+REDLINE_SERVER_URL="$scheme://localhost:2567/play" \
+  "${runner[@]}" --resolution 1280x720 \
   res://tests/live_check.tscn 2>&1 \
   | grep -vE "ALSA|libpulse|snd_|pcm|V-Sync|OpenGL|audio driver|shader|icon\.svg|^[[:space:]]*at: |Condition \"status"

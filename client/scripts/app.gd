@@ -42,8 +42,13 @@ func _ready() -> void:
 
 
 ## Remembers the last server that worked, so a friend's address or a tunnel
-## URL does not have to be retyped every launch.
+## URL does not have to be retyped every launch. REDLINE_SERVER_URL overrides
+## it, which is how the end-to-end check aims the real client at a test
+## server without touching stored settings.
 func _server_url() -> String:
+	var from_env := OS.get_environment("REDLINE_SERVER_URL").strip_edges()
+	if not from_env.is_empty():
+		return from_env
 	var stored := String(ProjectSettings.get_setting("redline/server_url", ""))
 	return stored if not stored.is_empty() else DEFAULT_SERVER_URL
 
@@ -111,9 +116,21 @@ func _on_rejoin_requested(match_id: String) -> void:
 func _on_reconnect_requested(server_url: String) -> void:
 	if server_url.is_empty():
 		return
-	ProjectSettings.set_setting("redline/server_url", server_url)
+
+	# Accept a bare host or an http(s) URL and turn it into what was meant,
+	# defaulting to the secure scheme.
+	var url := ServerUrl.normalise(server_url)
+	var risk := ServerUrl.risk_of(url)
+	if not risk.is_empty():
+		_lobby.set_server_url(url)
+		_lobby.show_message(risk, true)
+		if not ServerUrl.is_valid(url):
+			return
+
+	ProjectSettings.set_setting("redline/server_url", url)
+	_lobby.set_server_url(url)
 	_lobby.set_busy(true, "Connecting...")
-	Net.connect_to_server(server_url)
+	Net.connect_to_server(url)
 
 
 ## The last resort when the server will not accept this device: throw the
@@ -214,5 +231,6 @@ func _explain(code: String, detail: String) -> String:
 		"auth_failed": return "This device's credentials were refused. Another device may have registered the same identity."
 		"invalid_player_id": return "This device's identity is malformed."
 		"invalid_token": return "This device's credentials are malformed."
+		"insecure_transport": return "The server refused an unencrypted connection. Use a wss:// address."
 		"protocol_mismatch": return "Client and server versions do not match. %s" % detail
 		_: return detail if not detail.is_empty() else code.replace("_", " ")

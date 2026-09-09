@@ -18,6 +18,7 @@ redline-commander/
 ├── docs/
 │   ├── ARCHITECTURE.md         # Layering, message flow, and why it's shaped this way
 │   ├── ARCHITECTURE_REVIEW.md  # What was wrong with the first scaffold, and what changed
+│   ├── DEPLOYMENT.md           # TLS, environment variables, running it for real
 │   ├── PROTOCOL.md             # The exact client/server wire contract
 │   ├── GAME_DESIGN.md          # Factions, units, terrain, combat rules
 │   └── ROADMAP.md              # What's built vs. what's next
@@ -101,7 +102,8 @@ xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
 runs the real client against it:
 
 ```bash
-tools/live-check.sh
+tools/live-check.sh          # plaintext on loopback
+tools/live-check.sh --tls    # the same, over wss:// with a generated cert
 ```
 
 The boot check proves the autoloads come up, the data tables parsed, and the
@@ -142,10 +144,13 @@ Missing before it is a game: art, more maps, and a campaign. See
 
 Devices authenticate on connect: the first connection to use an identity
 registers it, and later ones must present the same secret (`server/src/auth`).
+The device secret travels in the `hello` frame, so the server **refuses
+unencrypted connections from anything but loopback** — forgetting TLS fails
+loudly rather than leaking credentials quietly.
 
-**Put TLS in front of it before exposing it beyond a trusted network.** The
-device secret travels in the `hello` frame, so over plain `ws://` anyone on
-the path can read it and become that player.
+To play with people outside your own network, see `docs/DEPLOYMENT.md`: put
+it behind a reverse proxy that terminates TLS, or give the server a
+certificate of its own.
 
 ## A note on originality
 

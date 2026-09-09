@@ -15,6 +15,11 @@ const fs = require("fs");
 const { WebSocket } = require("ws");
 
 const URL = process.env.REDLINE_URL || "ws://localhost:2567/play";
+// A self-signed dev certificate has to be supplied explicitly; without this
+// the connection is rejected, which is the point of it.
+const options = process.env.REDLINE_TLS_CA
+  ? { ca: [fs.readFileSync(process.env.REDLINE_TLS_CA)] }
+  : {};
 // Long enough to pass the server's token check. Fine for a dev helper on
 // localhost; a real client generates 32 random bytes per install.
 const DEV_TOKEN = "dev-host-token-0000000000000000";
@@ -24,7 +29,7 @@ if (!codeFile) {
   process.exit(1);
 }
 
-const socket = new WebSocket(URL);
+const socket = new WebSocket(URL, options);
 let matchId = null;
 let endedTurn = false;
 

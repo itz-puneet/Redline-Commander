@@ -34,7 +34,7 @@ protocol.
 - [x] Headless client boot check (`godot --headless res://tests/boot_check.tscn`)
 - [x] **Authenticate `token`** — trust on first use, salted hashes, see
       `server/src/auth` and the Authentication section of `docs/PROTOCOL.md`
-- [ ] Rate limiting per connection
+- [ ] Rate limiting per connection (put it in the proxy meanwhile)
 
 ## Phase 3 — Make it playable ✅
 - [x] Project imports cleanly in Godot 4.3 and all scripts compile
@@ -64,8 +64,8 @@ protocol.
 - [ ] Sound and music (original or properly licensed)
 - [ ] UI/UX pass, animations, damage popups
 - [ ] Push notifications for "it's your turn"
-- [ ] Server deployment behind TLS (`wss://`) — **required before exposing
-      the server**, since the device secret travels in the `hello` frame
+- [x] TLS (`wss://`) — the server terminates it or sits behind a proxy, and
+      refuses plaintext from anything but loopback. See `docs/DEPLOYMENT.md`.
 - [ ] Postgres-backed `MatchStore` and `CredentialStore`
 - [ ] Identity transfer between devices, so a reinstall does not orphan matches
 - [ ] Android signing, Play Store listing (if distributing beyond direct APKs)

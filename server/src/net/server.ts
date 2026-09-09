@@ -9,6 +9,7 @@ import type { Server as HttpServer } from "http";
 import { decode, encode, PROTOCOL_VERSION, type ServerMessage } from "./protocol";
 import type { MatchService, Delivery } from "../match/MatchService";
 import type { AuthService } from "../auth/AuthService";
+import { judgeConnection, type TlsSettings } from "./tls";
 
 const SERVER_VERSION = "0.2.0";
 const HEARTBEAT_MS = 30_000;
@@ -36,12 +37,14 @@ interface Session {
 /** Close codes, so the client can tell "wrong secret" from "network died". */
 const CLOSE_REPLACED = 4000;
 const CLOSE_AUTH_FAILED = 4001;
+const CLOSE_INSECURE = 4002;
 const MAX_AUTH_ATTEMPTS = 3;
 
 export function attachGameServer(
   httpServer: HttpServer,
   matches: MatchService,
   auth: AuthService,
+  tls: TlsSettings,
 ): WebSocketServer {
   const wss = new WebSocketServer({ server: httpServer, path: "/play" });
   /** playerId -> session. One live connection per player; a second login
@@ -65,7 +68,27 @@ export function attachGameServer(
     }
   }
 
-  wss.on("connection", (socket) => {
+  wss.on("connection", (socket, request) => {
+    // Refuse before a single frame is read. The client's first message
+    // carries its secret, so an insecure connection must never get far
+    // enough to send one.
+    const verdict = judgeConnection(
+      {
+        encrypted: (request.socket as { encrypted?: boolean }).encrypted === true,
+        forwardedProto: request.headers["x-forwarded-proto"] as string | undefined,
+        remoteAddress: request.socket.remoteAddress,
+      },
+      tls,
+    );
+    if (!verdict.ok) {
+      console.warn(
+        `[net] refused insecure connection from ${request.socket.remoteAddress ?? "unknown"}`,
+      );
+      send(socket, { t: "error", code: "insecure_transport" });
+      socket.close(CLOSE_INSECURE, "insecure_transport");
+      return;
+    }
+
     const session: Session = {
       socket, playerId: null, matchId: null, alive: true, authAttempts: 0,
       queue: Promise.resolve(),

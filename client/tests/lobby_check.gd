@@ -17,6 +17,7 @@ var _intents: Array[Dictionary] = []
 
 
 func _ready() -> void:
+	_check_server_urls()
 	await _check_lobby_view()
 	await _check_routing()
 
@@ -37,6 +38,55 @@ func _check(label: String, condition: bool, detail: String = "") -> void:
 
 func _node(path: String) -> Node:
 	return _lobby.get_node("Center/Panel/Margin/Column/" + path)
+
+
+## --- server addresses --------------------------------------------------
+
+## The device secret travels in the first frame, so an unencrypted address to
+## anything but this machine gives it away. The client says so in advance
+## rather than leaving the player with an opaque refusal.
+func _check_server_urls() -> void:
+	_check("wss is recognised as secure", ServerUrl.is_secure("wss://example.com:2567/play"))
+	_check("ws is not", not ServerUrl.is_secure("ws://example.com:2567/play"))
+	_check("and the check is not fooled by case",
+		ServerUrl.is_secure("WSS://Example.com/play"))
+
+	_check("a host is extracted without port or path",
+		ServerUrl.host_of("wss://play.example.com:2567/play") == "play.example.com",
+		"got '%s'" % ServerUrl.host_of("wss://play.example.com:2567/play"))
+	_check("an IPv6 literal survives extraction",
+		ServerUrl.host_of("ws://[::1]:2567/play") == "[::1]",
+		"got '%s'" % ServerUrl.host_of("ws://[::1]:2567/play"))
+
+	for local in ["ws://localhost:2567/play", "ws://127.0.0.1:2567/play", "ws://[::1]:2567/play"]:
+		_check("%s counts as local" % local, ServerUrl.is_local(local))
+	_check("a remote host does not", not ServerUrl.is_local("ws://play.example.com:2567/play"))
+
+	# Plaintext to localhost is fine - nothing crosses a wire.
+	_check("no warning for plaintext on this machine",
+		ServerUrl.risk_of("ws://localhost:2567/play").is_empty())
+	_check("no warning for a secure remote address",
+		ServerUrl.risk_of("wss://play.example.com:2567/play").is_empty())
+	_check("but plaintext to a remote host is called out",
+		ServerUrl.risk_of("ws://play.example.com:2567/play").contains("wss://"),
+		"got '%s'" % ServerUrl.risk_of("ws://play.example.com:2567/play"))
+	_check("and nonsense is called out too",
+		not ServerUrl.risk_of("play.example.com").is_empty())
+
+	_check("a bare host is assumed to want the secure scheme",
+		ServerUrl.normalise("play.example.com:2567/play") == "wss://play.example.com:2567/play",
+		"got '%s'" % ServerUrl.normalise("play.example.com:2567/play"))
+	_check("https becomes wss",
+		ServerUrl.normalise("https://play.example.com/play") == "wss://play.example.com/play")
+	_check("http becomes ws, rather than being silently upgraded",
+		ServerUrl.normalise("http://localhost:2567/play") == "ws://localhost:2567/play")
+	_check("an address that is already right is left alone",
+		ServerUrl.normalise("  wss://play.example.com/play  ") == "wss://play.example.com/play")
+	_check("and an empty field stays empty", ServerUrl.normalise("   ") == "")
+
+	_check("a valid address validates", ServerUrl.is_valid("wss://example.com/play"))
+	_check("a schemeless one does not", not ServerUrl.is_valid("example.com/play"))
+	_check("and neither does an empty one", not ServerUrl.is_valid(""))
 
 
 ## --- the lobby view ----------------------------------------------------
