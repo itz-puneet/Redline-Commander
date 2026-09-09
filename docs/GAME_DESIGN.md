@@ -75,6 +75,10 @@ Terrain defense scales with the defender's remaining HP, so a nearly-dead
 unit gets little benefit from cover. Luck is added before mitigation, so
 cover dampens lucky rolls too.
 
+Because luck is rolled server-side, the client's pre-attack forecast shows a
+*range* rather than a single number — it cannot know the roll, and a
+confident figure the server then contradicts is worse than an honest bracket.
+
 HP is stored 0–100 and shown to the player as ten pips (`ceil(hp / 10)`,
 never 0 for a living unit). A defender that survives a **direct** attack
 counters using the same formula with roles swapped, its post-damage HP, and

@@ -117,16 +117,33 @@ func _check_move() -> void:
 		path.size() > 0 and absi(int(path[0]["x"]) - 6) + absi(int(path[0]["y"]) - 4) == 1)
 
 
+## Attacking takes two taps: the first arms the target and shows the
+## forecast, the second commits.
 func _check_attack() -> void:
 	_reset()
 	_controller.tap_tile(Vector2i(6, 4))
 	_controller.tap_tile(Vector2i(7, 4))
 
+	_check("the first tap on an enemy arms it", _controller.armed_target_id() == "b1",
+		"armed '%s'" % _controller.armed_target_id())
+	_check("and commits nothing yet", _sent.is_empty())
+
+	_controller.tap_tile(Vector2i(7, 4))
 	var action := _last()
-	_check("tapping a highlighted enemy submits an attack",
+	_check("a second tap on the armed enemy attacks",
 		String(action.get("type", "")) == "attack", "got %s" % action.get("type", "nothing"))
 	_check("the attack names attacker and target",
 		String(action.get("unitId", "")) == "a1" and String(action.get("targetUnitId", "")) == "b1")
+
+	# Tapping away must disarm, so a stray tap cannot leave a live trigger.
+	_reset()
+	_controller.tap_tile(Vector2i(6, 4))
+	_controller.tap_tile(Vector2i(7, 4))
+	_check("armed before tapping away", _controller.armed_target_id() == "b1")
+	_controller.tap_tile(Vector2i(6, 5))
+	_check("tapping elsewhere disarms", _controller.armed_target_id().is_empty())
+	_check("and that tap was not an attack",
+		_sent.is_empty() or String(_last().get("type", "")) != "attack")
 
 
 ## --- selection management ----------------------------------------------

@@ -57,6 +57,8 @@ const FOG_COLOR := Color(0.04, 0.05, 0.09, 0.55)
 const MOVE_RANGE := Color(0.35, 0.62, 1.0, 0.30)
 const ATTACK_RANGE := Color(0.95, 0.28, 0.24, 0.38)
 const SPENT_TINT := Color(0.35, 0.35, 0.42, 0.55)
+## The one target a confirming tap would actually hit.
+const ARMED_TARGET := Color(1.0, 0.85, 0.35)
 
 
 static func slot_color(slot: int) -> Color:

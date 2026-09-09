@@ -13,10 +13,16 @@ extends Node
 ## `tap_tile()` is the public entry point, so the interaction rules can be
 ## tested by feeding tiles instead of synthesising touch events.
 ##
+## Attacking takes two taps on purpose. The first arms the target and puts
+## the damage forecast on screen; the second commits. A forecast the player
+## cannot read before committing is not worth computing, and an attack is the
+## one action here that cannot be undone.
+##
 ## The gesture vocabulary:
 ##   tap your unit             select it, show move range and attackable enemies
 ##   tap a highlighted tile    move there
-##   tap a highlighted enemy   attack it
+##   tap a highlighted enemy   arm it and show the forecast
+##   tap the armed enemy again attack it
 ##   tap the selected unit     deselect
 ##   tap your empty factory    open the build menu
 ##   Capture / Wait            bar buttons, for actions with no target tile
@@ -30,17 +36,25 @@ signal animating_changed(animating: bool)
 @export var turn_controller_path: NodePath = NodePath("../TurnController")
 @export var action_bar_path: NodePath = NodePath("../UI/ActionBar")
 @export var build_menu_path: NodePath = NodePath("../UI/BuildMenu")
+@export var hud_path: NodePath = NodePath("../UI/Hud")
 
 var _board: Board = null
 var _turns: TurnController = null
 var _bar: Node = null
 var _build_menu: Node = null
+var _top_bar: Node = null
+var _unit_info: Node = null
+var _turn_banner: Node = null
 var _animator: EventAnimator = null
 
 var _selected_id: String = ""
 var _move_range: Dictionary = {}       ## Vector2i -> cost
 var _attack_targets: Array = []        ## Vector2i
+## The target a confirming tap would hit. Empty means nothing is armed.
+var _armed_target_id: String = ""
 var _animating := false
+## Whose turn it last was, so a change can be announced exactly once.
+var _turn_signature: String = ""
 
 
 func _ready() -> void:
@@ -48,6 +62,12 @@ func _ready() -> void:
 	_turns = get_node_or_null(turn_controller_path) as TurnController
 	_bar = get_node_or_null(action_bar_path)
 	_build_menu = get_node_or_null(build_menu_path)
+
+	var hud := get_node_or_null(hud_path)
+	if hud != null:
+		_top_bar = hud.get_node_or_null("TopBar")
+		_unit_info = hud.get_node_or_null("UnitInfo")
+		_turn_banner = hud.get_node_or_null("TurnBanner")
 
 	if _board == null or _turns == null:
 		push_error("MatchController: board or turn controller not found")
@@ -115,10 +135,21 @@ func refresh() -> void:
 	if build_menu_is_open() and not can_build_at(_build_menu.tile()):
 		_build_menu.close()
 
+	# The armed target may have died, moved out of range, or slipped back
+	# into the fog while the player was deciding.
+	if not _armed_target_id.is_empty():
+		var armed: Dictionary = current.units.get(_armed_target_id, {})
+		if armed.is_empty() or not _attack_targets.has(
+				Vector2i(int(armed.get("x", 0)), int(armed.get("y", 0)))):
+			_armed_target_id = ""
+
 	if not _selected_id.is_empty() and not _can_command(_selected_id):
 		_set_selection("")
 	else:
 		_recompute_overlays()
+
+	_announce_turn_change(current)
+	_refresh_hud()
 	_refresh_bar()
 
 
@@ -151,8 +182,15 @@ func tap_tile(tile: Vector2i) -> void:
 	# An enemy under the attack overlay is a target, and takes priority: a
 	# tile can be both reachable and occupied by something worth shooting.
 	if _attack_targets.has(tile) and not tapped.is_empty():
-		_turns.attack(_selected_id, String(tapped.get("id", "")))
+		var target_id := String(tapped.get("id", ""))
+		if _armed_target_id == target_id:
+			_turns.attack(_selected_id, target_id)
+		else:
+			_arm_target(target_id)
 		return
+
+	# Any other tap abandons an armed target rather than carrying it along.
+	_disarm()
 
 	var selected: Dictionary = current.units.get(_selected_id, {})
 	var origin := Vector2i(int(selected.get("x", 0)), int(selected.get("y", 0)))
@@ -176,6 +214,28 @@ func tap_tile(tile: Vector2i) -> void:
 
 func clear_selection() -> void:
 	_set_selection("")
+
+
+## --- targeting ---------------------------------------------------------
+
+func armed_target_id() -> String:
+	return _armed_target_id
+
+
+func _arm_target(target_id: String) -> void:
+	_armed_target_id = target_id
+	_recompute_overlays()
+	_refresh_hud()
+	_refresh_bar()
+
+
+func _disarm() -> void:
+	if _armed_target_id.is_empty():
+		return
+	_armed_target_id = ""
+	_recompute_overlays()
+	_refresh_hud()
+	_refresh_bar()
 
 
 ## --- production --------------------------------------------------------
@@ -307,7 +367,10 @@ func _can_command(unit_id: String) -> bool:
 
 func _set_selection(unit_id: String) -> void:
 	_selected_id = unit_id
+	# A target armed for the previous unit means nothing for this one.
+	_armed_target_id = ""
 	_recompute_overlays()
+	_refresh_hud()
 	_refresh_bar()
 	selection_changed.emit(unit_id)
 
@@ -337,6 +400,10 @@ func _recompute_overlays() -> void:
 
 	_board.show_selection(Vector2i(int(unit.get("x", 0)), int(unit.get("y", 0))))
 
+	var armed: Dictionary = current.units.get(_armed_target_id, {})
+	if not armed.is_empty():
+		_board.show_armed_target(Vector2i(int(armed.get("x", 0)), int(armed.get("y", 0))))
+
 
 ## Whether the selected unit is standing on something it could capture.
 func can_capture_here() -> bool:
@@ -356,6 +423,48 @@ func can_capture_here() -> bool:
 	return bool(terrain.get("capturable", false)) and current.tile_owner_at(x, y) != current.you_slot
 
 
+## The banner fires on a change of turn or round, and only once per change -
+## refresh() runs on every server message, not just the interesting ones.
+func _announce_turn_change(current: MatchState) -> void:
+	var signature := "%s:%d:%d" % [current.phase, current.current_slot, current.round_number]
+	if signature == _turn_signature:
+		return
+
+	var first := _turn_signature.is_empty()
+	_turn_signature = signature
+	if _turn_banner == null or first or current.phase != "active":
+		return
+
+	if current.is_my_turn():
+		_turn_banner.announce("Your turn", Color("#ffe08a"))
+	else:
+		_turn_banner.announce("Opponent's turn", Color("#9aa0ac"))
+
+
+func _refresh_hud() -> void:
+	var current := state()
+	if _top_bar != null:
+		_top_bar.refresh(current)
+
+	if _unit_info == null:
+		return
+	if current == null:
+		_unit_info.clear()
+		return
+
+	var armed: Dictionary = current.units.get(_armed_target_id, {})
+	var selected: Dictionary = current.units.get(_selected_id, {})
+
+	# With a target armed the question is "what happens if I attack", so the
+	# panel switches to the forecast against it.
+	if not armed.is_empty() and not selected.is_empty():
+		_unit_info.show_forecast(current, selected, armed)
+	elif not selected.is_empty():
+		_unit_info.show_unit(current, selected)
+	else:
+		_unit_info.clear()
+
+
 func _refresh_bar() -> void:
 	if _bar == null:
 		return
@@ -373,6 +482,8 @@ func _refresh_bar() -> void:
 			status = "Sending..."
 		elif not current.is_my_turn():
 			status = "Opponent's turn"
+		elif not _armed_target_id.is_empty():
+			status = "Tap the target again to attack"
 		elif has_selection:
 			var unit: Dictionary = current.units.get(_selected_id, {})
 			status = "%s selected" % GameData.unit_stats(

@@ -1,0 +1,107 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/top_bar.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/ui/unit_info_panel.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/turn_banner.gd" id="3"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_top"]
+bg_color = Color(0.0784314, 0.0901961, 0.117647, 0.92)
+border_width_bottom = 1
+border_color = Color(0.301961, 0.32549, 0.388235, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_info"]
+bg_color = Color(0.0784314, 0.0901961, 0.117647, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_color = Color(0.301961, 0.32549, 0.388235, 1)
+corner_radius_top_right = 8
+
+[node name="Hud" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TopBar" type="PanelContainer" parent="."]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 40.0
+grow_horizontal = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_top")
+script = ExtResource("1")
+
+[node name="Margin" type="MarginContainer" parent="TopBar"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+
+[node name="Row" type="HBoxContainer" parent="TopBar/Margin"]
+theme_override_constants/separation = 24
+
+[node name="Turn" type="Label" parent="TopBar/Margin/Row"]
+text = "Your turn"
+vertical_alignment = 1
+
+[node name="Round" type="Label" parent="TopBar/Margin/Row"]
+size_flags_horizontal = 3
+text = "Round 1"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Funds" type="Label" parent="TopBar/Margin/Row"]
+text = "0 funds"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="UnitInfo" type="PanelContainer" parent="."]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -184.0
+offset_right = 560.0
+offset_bottom = -72.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_info")
+script = ExtResource("2")
+
+[node name="Margin" type="MarginContainer" parent="UnitInfo"]
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+
+[node name="Column" type="VBoxContainer" parent="UnitInfo/Margin"]
+theme_override_constants/separation = 2
+
+[node name="Title" type="Label" parent="UnitInfo/Margin/Column"]
+text = "Unit"
+
+[node name="Stats" type="Label" parent="UnitInfo/Margin/Column"]
+text = "HP 10/10"
+
+[node name="Terrain" type="Label" parent="UnitInfo/Margin/Column"]
+text = "Plains"
+
+[node name="Forecast" type="Label" parent="UnitInfo/Margin/Column"]
+text = ""
+
+[node name="TurnBanner" type="Label" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -320.0
+offset_top = -40.0
+offset_right = 320.0
+offset_bottom = 40.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 34
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+script = ExtResource("3")

@@ -56,9 +56,18 @@ layout of the code, so keep them that way.
    Do not add a broadcast path that sends full state to everyone; a modified
    client would read straight through the fog.
 
-4. **The client is never authoritative.** `MovementPreview` and any other
-   client-side rule code exists only to draw overlays. The server re-validates
+4. **The client is never authoritative.** `MovementPreview`,
+   `CombatForecast`, `GameData.build_cost()` and any other client-side rule
+   code exists only to put something on screen. The server re-validates
    everything. If they disagree, the client is the bug.
+
+   Where the client mirrors a server formula, **cross-check it with matching
+   numbers on both sides** rather than trusting two implementations to stay
+   in step. `build_check` asserts the same production costs as
+   `engine.test.ts`, and `hud_check` asserts the damage forecast brackets the
+   two reference duels that suite pins. Neither can drift without a test
+   going red. Anything the player is shown and then charged or dealt
+   differently is a bug they notice immediately.
 
 5. **A match is a persisted record, not a live connection.** Players drop,
    background the app, and take their turn hours later. Committed turns are
@@ -68,9 +77,10 @@ layout of the code, so keep them that way.
 ## Current status
 
 Playable end to end: connect, create or join a match by code, and fight it
-out - board, fog, touch input, animated moves and combat, all validated by
-the server and verified against a real one by `tools/live-check.sh`. Still
-missing before it is a game: a full HUD and art. Token
+out - board, fog, touch input, animated moves and combat, production, and a HUD
+with a damage forecast, all validated by the server and verified against a
+real one by `tools/live-check.sh`. Still
+missing before it is a game: art, more maps, and a campaign. Token
 verification is still outstanding and blocks any public deployment. See
 `docs/ROADMAP.md`.
 
@@ -98,6 +108,7 @@ godot --headless res://tests/input_check.tscn   # what a tap on a tile does
 godot --headless res://tests/lobby_check.tscn   # the lobby and screen routing
 godot --headless res://tests/animation_check.tscn  # event animation
 godot --headless res://tests/build_check.tscn   # production costs and the build menu
+godot --headless res://tests/hud_check.tscn     # damage forecast, panels, banner
 
 # These need a real renderer - use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn

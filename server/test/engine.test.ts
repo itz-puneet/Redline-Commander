@@ -396,3 +396,64 @@ test("applyAction never mutates the state it was given", () => {
   applyAction(state, 1, { type: "move", unitId: infantry.id, path: [{ x: step.x, y: step.y }] });
   assert.equal(JSON.stringify(state), before);
 });
+
+/* ------------------------------------------------------------------ */
+/* Reference figures for the client's damage forecast                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * These pin down two exact combat outcomes. The Godot client computes a
+ * forecast with its own implementation of the same formula, and its tests
+ * assert that its predicted range brackets these numbers - so the two
+ * implementations cannot drift apart without a test going red on one side
+ * or the other.
+ */
+function stagedDuel(defenderAt: { x: number; y: number }, attackerAt: { x: number; y: number }) {
+  const state = structuredClone(startedMatch());
+  state.units = {
+    atk: {
+      id: "atk", unitType: "light_tank", ownerSlot: 1,
+      x: attackerAt.x, y: attackerAt.y, hp: 100, fuel: 70, ammo: 9,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+    def: {
+      id: "def", unitType: "anti_tank_infantry", ownerSlot: 2,
+      x: defenderAt.x, y: defenderAt.y, hp: 90, fuel: 70, ammo: 3,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+  };
+  return state;
+}
+
+test("reference duel on open road, for the client's forecast", () => {
+  const state = stagedDuel({ x: 7, y: 4 }, { x: 6, y: 4 });
+  assert.equal(TERRAIN[state.map.tiles[4 * state.map.width + 7].terrain].defense, 0,
+    "the defender must be standing on cover-free ground");
+
+  const result = applyAction(state, 1, { type: "attack", unitId: "atk", targetUnitId: "def" });
+  assert.ok(result.ok);
+  const hit = result.events.find((e) => e.type === "unitAttacked");
+  assert.ok(hit && hit.type === "unitAttacked");
+
+  // Base 70, attacker at full health, no terrain mitigation: 70 + luck(0-9).
+  assert.ok(hit.damage >= 70 && hit.damage <= 79, `damage was ${hit.damage}`);
+  // The counter scales with what the defender has left.
+  assert.equal(hit.counterDamage, Math.floor(70 * ((90 - hit.damage) / 100)),
+    `counter was ${hit.counterDamage} after ${hit.damage}`);
+});
+
+test("reference duel into forest cover, for the client's forecast", () => {
+  const state = stagedDuel({ x: 13, y: 3 }, { x: 12, y: 3 });
+  assert.equal(state.map.tiles[3 * state.map.width + 13].terrain, "forest");
+
+  const result = applyAction(state, 1, { type: "attack", unitId: "atk", targetUnitId: "def" });
+  assert.ok(result.ok);
+  const hit = result.events.find((e) => e.type === "unitAttacked");
+  assert.ok(hit && hit.type === "unitAttacked");
+
+  // Forest is 30% defense, scaled by the defender's 90 HP: mitigation 0.73.
+  const low = Math.floor(70 * 0.73);
+  const high = Math.floor(79 * 0.73);
+  assert.ok(hit.damage >= low && hit.damage <= high,
+    `damage ${hit.damage} outside ${low}..${high}`);
+});

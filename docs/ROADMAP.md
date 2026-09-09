@@ -37,7 +37,7 @@ protocol.
       `server/src/net/server.ts`)
 - [ ] Rate limiting per connection
 
-## Phase 3 — Make it playable (next up)
+## Phase 3 — Make it playable ✅
 - [x] Project imports cleanly in Godot 4.3 and all scripts compile
 - [x] Board scene: terrain tilemap, building ownership, units, fog, camera pan/zoom
 - [x] Movement/attack/selection overlays, driven by `MovementPreview`
@@ -46,7 +46,7 @@ protocol.
 - [x] `scenes/match.tscn` - the playable screen, wired through `TurnController`
 - [x] Minimal action bar (Capture / Wait / Cancel / End Turn)
 - [x] Animate the `events` from `action_confirmed` instead of snapping
-- [ ] Full HUD: turn banner, unit info panel, damage forecast
+- [x] Full HUD: top bar, turn banner, unit info panel, damage forecast
 - [x] Build menu when tapping an owned factory/airport/port
 - [x] Lobby screen: connect, create match, share code, join by code, rejoin
 - [x] End-to-end check against a real server (`tools/live-check.sh`)
@@ -54,7 +54,7 @@ protocol.
 - [ ] Transport load/unload actions (data and state exist; engine does not)
 - [ ] Faction Field Directives (in `factions.json`; not wired into the engine)
 
-## Phase 4 — Content
+## Phase 4 — Content (next up)
 - [ ] Original sprite art for all v1 units, two factions minimum — this is
       the one part that genuinely cannot be scaffolded; commission, draw or
       generate art that is yours

@@ -37,6 +37,7 @@ redline-commander/
 │       ├── net/network_client.gd     # autoload: WebSocket + JSON, auto-reconnect
 │       ├── state/match_state.gd      # local mirror of the server's view
 │       ├── rules/movement_preview.gd # NON-authoritative range preview
+│       ├── rules/combat_forecast.gd  # NON-authoritative damage forecast
 │       ├── board/board.gd            # renders a MatchState; render(state)
 │       ├── board/board_theme.gd      # placeholder colours and labels
 │       ├── board/terrain_tileset.gd  # builds the TileSet from terrain data
@@ -50,6 +51,9 @@ redline-commander/
 │       ├── ui/lobby_screen.gd         # connect, create, join by code, rejoin
 │       ├── ui/action_bar.gd          # Capture / Wait / Cancel / End Turn
 │       ├── ui/build_menu.gd          # what a production tile can make
+│       ├── ui/top_bar.gd             # turn, round, funds
+│       ├── ui/unit_info_panel.gd     # unit stats and the attack forecast
+│       ├── ui/turn_banner.gd         # "Your turn" when it comes round
 │       ├── match_controller.gd       # what a tap means: select, move, attack
 │       └── turn_controller.gd        # sends one action, waits, adopts result
 └── server/
@@ -85,6 +89,7 @@ godot --headless res://tests/input_check.tscn   # 34 checks: what a tap does
 godot --headless res://tests/lobby_check.tscn   # 26 checks: lobby and routing
 godot --headless res://tests/animation_check.tscn  # 24 checks: event animation
 godot --headless res://tests/build_check.tscn   # 43 checks: costs and production
+godot --headless res://tests/hud_check.tscn     # 41 checks: forecast and panels
 
 # These need a real renderer, so use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
@@ -128,9 +133,11 @@ with the server validating every step and fog of war enforced per player.
 
 Moves walk their path, attacks lunge and pop damage numbers, kills fade out
 and captures flash. Income accumulates and can be spent: tap one of your
-factories, airports or ports to build.
+factories, airports or ports to build. Attacking takes two taps — the first
+shows what the exchange would cost you, the second commits.
 
-Missing before it is a game: a full HUD and art. See `docs/ROADMAP.md`.
+Missing before it is a game: art, more maps, and a campaign. See
+`docs/ROADMAP.md`.
 
 **Do not expose the server publicly yet.** Client tokens are not verified, so
 a client can currently claim any player id (`TODO(auth)` in

@@ -1,9 +1,10 @@
 extends Node
 ## Renders the playable match screen to a PNG.
 ##
-## Drives the real scenes/match.tscn - board, action bar and controller -
-## seeded with the test fixture and with a unit selected, so the picture
-## shows what a player actually sees rather than a board in isolation.
+## Drives the real scenes/match.tscn - board, HUD, action bar and controller
+## - seeded with the test fixture, with a unit selected and a target armed,
+## so the picture shows what a player actually sees at the moment that
+## matters: deciding whether to take the shot.
 ##
 ## Needs a real renderer, so it will not run under --headless:
 ##
@@ -15,6 +16,8 @@ const MATCH_SCENE := preload("res://scenes/match.tscn")
 const OUTPUT := "user://board_preview.png"
 ## The light tank, mid-map and in contact with an enemy.
 const SELECT_TILE := Vector2i(6, 4)
+## The enemy next to it: arming this puts the forecast on screen.
+const TARGET_TILE := Vector2i(7, 4)
 
 
 func _ready() -> void:
@@ -24,6 +27,7 @@ func _ready() -> void:
 	var controller: MatchController = match_scene.get_node("MatchController")
 	controller.load_view(Fixtures.match_view())
 	controller.tap_tile(SELECT_TILE)
+	controller.tap_tile(TARGET_TILE)
 
 	# Let the renderer settle before grabbing the frame.
 	await RenderingServer.frame_post_draw

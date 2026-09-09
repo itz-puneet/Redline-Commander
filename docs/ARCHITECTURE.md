@@ -125,6 +125,13 @@ selected — and re-validates it against every server view rather than trusting
 it. A unit that died, moved, or was spent while the player was deciding
 cannot leave a stale selection behind.
 
+Attacking takes two taps: the first arms the target and puts the damage
+forecast on screen, the second commits. A forecast the player cannot read
+before committing is not worth computing, and an attack is the one action
+that cannot be undone. `CombatForecast` mirrors the server's combat maths and
+reports a *range* rather than a number — the server rolls the luck, and
+pretending to know it would be a lie the server then contradicts.
+
 Production goes through the same one-action-at-a-time path as everything
 else: tapping an owned, empty production tile opens a menu of what it can
 build, and choosing one submits a `build`. The menu shows options the player
@@ -134,6 +141,11 @@ server engine — unlike a movement preview this has to agree *exactly*, since
 a price shown and then charged differently is a bug the player notices
 immediately, so both sides read the same modifiers out of `factions.json` and
 both test suites assert the same figures.
+
+That is the general pattern for client mirrors of server formulas: the two
+implementations are cross-checked by asserting matching numbers on both
+sides, not by hoping they stay in step. `engine.test.ts` pins two reference
+duels; `hud_check` asserts the forecast brackets them.
 
 Server events are animated before the new state is drawn. The ordering is
 the whole trick: `TurnController` adopts the incoming view immediately, but

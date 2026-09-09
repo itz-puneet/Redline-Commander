@@ -110,6 +110,12 @@ func show_selection(tile: Vector2i) -> void:
 	overlay_layer.highlight([tile], Color.WHITE, true)
 
 
+## The target a second tap would attack, marked apart from the others so
+## "which one is armed" is never a guess.
+func show_armed_target(tile: Vector2i) -> void:
+	overlay_layer.highlight([tile], BoardTheme.ARMED_TARGET, true)
+
+
 ## --- coordinates -------------------------------------------------------
 
 func tile_at_world(world_position: Vector2) -> Vector2i:
