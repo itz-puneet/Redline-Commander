@@ -53,7 +53,15 @@ argument (it clones first), and never calls `Math.random()`.
 - `movement.ts` — Dijkstra over per-terrain move costs; path re-walking
 - `combat.ts` — the damage formula, written down once
 - `vision.ts` — per-player visible tile sets
-- `view.ts` — builds the per-player payload
+- `view.ts` — builds the per-player payload, and **redacts** events rather
+  than merely filtering them: an enemy move is cut to the tiles actually
+  watched, `turnStarted` carries income only for the player whose turn it is
+  (income is their building count, and their hidden funds follow from it),
+  and builds and captures out of sight are not announced. Tile ownership is
+  what a player has seen, not the live grid. Events carry the slot they
+  concern rather than having it looked up, because filtering runs against the
+  state *after* the action — where a unit that just died no longer exists,
+  and a lookup would drop every event about it, including from its owner
 - `rng.ts` — seeded PRNG; the seed and counter live *in* the match state
 - `engine.ts` — action dispatch, turn flow, win conditions
 

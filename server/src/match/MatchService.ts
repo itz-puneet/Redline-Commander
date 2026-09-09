@@ -9,7 +9,7 @@
  * ordinary rather than special-cased.
  */
 
-import { randomBytes } from "crypto";
+import { randomBytes, randomInt } from "crypto";
 import { addPlayer, applyAction, createMatch } from "../game/engine";
 import { buildPlayerView, filterEventsFor, type PlayerView } from "../game/view";
 import type { Action, GameEvent, MatchState } from "../game/types";
@@ -103,7 +103,9 @@ export class MatchService {
   async create(playerId: string, mapId: string, faction: string): Promise<CommandResult> {
     let state: MatchState;
     try {
-      state = createMatch({ matchId: newId(), mapId });
+      // The seed comes from here rather than the engine, so the engine stays
+      // a pure function of its inputs and the seed is not guessable.
+      state = createMatch({ matchId: newId(), mapId, rngSeed: randomInt(0, 0x7fffffff) });
     } catch (err) {
       return { ok: false, reason: `bad_map: ${(err as Error).message}`, deliveries: [] };
     }

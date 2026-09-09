@@ -66,7 +66,15 @@ eventually wants real accounts.
 ```
 
 `path` excludes the origin tile and must be contiguous. The server re-walks
-it step by step; the client's own idea of the cost is never trusted.
+it step by step; the client's own idea of the cost is never trusted, and a
+malformed action is rejected at the transport before it reaches the rules.
+
+A move that walks into a unit the player cannot see **succeeds**, stopping
+the unit short — the `unitMoved` event reports where it actually ended.
+Refusing would let a client probe the fog for free. An attack requires that
+one of your units can *see* the target; `no_such_target` covers both "not
+there" and "cannot see it", so a rejection cannot be used to check whether a
+remembered unit is still alive.
 
 ## Server → client
 
@@ -93,10 +101,19 @@ Built per player by `server/src/game/view.ts`:
   `cargo` — a player cannot observe those.
 - **Own funds and directive charge** only; the opponent's read `null`.
 - `visibleTiles` as a list of tile indices (`y * width + x`).
-- Terrain is public; tile ownership is sent as-is.
+- Terrain is public; **tile ownership is what this player has seen**, not the
+  live grid — a building changing hands in the dark would otherwise pinpoint
+  the enemy infantry that took it.
 
-Events are filtered too: a player is not told an enemy moved somewhere they
-cannot see. Turn changes, captures, builds, defeats and match end are public.
+Events are **redacted** per player, not merely filtered, because several
+carry more than the view does:
+
+- An enemy move is cut to the tiles actually watched, so a route that ducks
+  into fog ends there.
+- `turnStarted` carries `income` only for the player whose turn it is —
+  income is their building count, and their hidden funds follow from it.
+- Builds and captures out of sight are not announced.
+- Only defeats and the end of the match are public.
 
 ## Rate limiting
 

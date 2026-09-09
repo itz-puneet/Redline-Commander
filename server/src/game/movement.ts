@@ -8,6 +8,7 @@
  */
 
 import { moveCost, tileAt, unitStats } from "./data";
+import { visibleTiles } from "./vision";
 import type { GameMap, MatchState, Unit, Vec2 } from "./types";
 
 export interface ReachableTile {
@@ -82,6 +83,16 @@ export interface PathCheck {
   ok: boolean;
   reason?: string;
   cost: number;
+  /**
+   * The path actually walked, which may be shorter than the one submitted:
+   * running into a unit the mover could not see stops them short rather than
+   * refusing the order. Refusing would be a free oracle - submit a move,
+   * read the rejection, learn what is standing in the fog without spending
+   * anything. Stopping costs the turn, which is what makes it honest.
+   */
+  path: Vec2[];
+  /** True when the move was cut short by something unseen. */
+  ambushed: boolean;
 }
 
 /**
@@ -91,40 +102,64 @@ export interface PathCheck {
  */
 export function validatePath(state: MatchState, unit: Unit, path: Vec2[]): PathCheck {
   const stats = unitStats(unit.unitType);
-  if (!stats) return { ok: false, reason: "unknown_unit_type", cost: 0 };
-  if (path.length === 0) return { ok: true, cost: 0 };
+  if (!stats) return { ok: false, reason: "unknown_unit_type", cost: 0, path: [], ambushed: false };
+  if (path.length === 0) return { ok: true, cost: 0, path: [], ambushed: false };
 
   const budget = Math.min(stats.move, unit.fuel);
+  const visible = visibleTiles(state, unit.ownerSlot);
+  const canSee = (x: number, y: number) => visible.has(y * state.map.width + x);
+
+  const walked: Vec2[] = [];
+  const costs: number[] = [];
   let cost = 0;
   let prev: Vec2 = { x: unit.x, y: unit.y };
+  let ambushed = false;
 
   for (const step of path) {
     const dx = Math.abs(step.x - prev.x);
     const dy = Math.abs(step.y - prev.y);
-    if (dx + dy !== 1) return { ok: false, reason: "path_not_contiguous", cost };
+    if (dx + dy !== 1) return { ok: false, reason: "path_not_contiguous", cost, path: [], ambushed: false };
 
     const tile = tileAt(state.map, step.x, step.y);
-    if (!tile) return { ok: false, reason: "path_off_map", cost };
+    if (!tile) return { ok: false, reason: "path_off_map", cost, path: [], ambushed: false };
 
     const stepCost = moveCost(tile.terrain, stats.move_type);
-    if (stepCost === null) return { ok: false, reason: "impassable_terrain", cost };
+    if (stepCost === null) {
+      return { ok: false, reason: "impassable_terrain", cost, path: [], ambushed: false };
+    }
 
     const blocker = unitAt(state, step.x, step.y);
     if (blocker && blocker.ownerSlot !== unit.ownerSlot && blocker.id !== unit.id) {
-      return { ok: false, reason: "path_blocked_by_enemy", cost };
+      // Something the player could already see: an illegal order, refused.
+      if (canSee(step.x, step.y)) {
+        return { ok: false, reason: "path_blocked_by_enemy", cost, path: [], ambushed: false };
+      }
+      // Something they could not: they walk into it and stop.
+      ambushed = true;
+      break;
     }
 
     cost += stepCost;
-    if (cost > budget) return { ok: false, reason: "insufficient_movement", cost };
+    if (cost > budget) {
+      return { ok: false, reason: "insufficient_movement", cost, path: [], ambushed: false };
+    }
+    walked.push(step);
+    costs.push(stepCost);
     prev = step;
   }
 
-  const destOccupant = unitAt(state, prev.x, prev.y);
-  if (destOccupant && destOccupant.id !== unit.id) {
-    return { ok: false, reason: "destination_occupied", cost };
+  // Back off to somewhere the unit can actually stand. After an ambush the
+  // tile it stopped on may be occupied by a friend it was passing through.
+  while (walked.length > 0) {
+    const last = walked[walked.length - 1];
+    const occupant = unitAt(state, last.x, last.y);
+    if (!occupant || occupant.id === unit.id) break;
+    if (!ambushed) return { ok: false, reason: "destination_occupied", cost, path: [], ambushed: false };
+    walked.pop();
+    cost -= costs.pop() ?? 0;
   }
 
-  return { ok: true, cost };
+  return { ok: true, cost, path: walked, ambushed };
 }
 
 /** Manhattan distance - the metric used for attack range. */

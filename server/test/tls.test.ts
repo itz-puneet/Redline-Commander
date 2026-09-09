@@ -146,3 +146,39 @@ test("each posture describes itself distinctly", () => {
   assert.equal(new Set(postures).size, postures.length, "postures must be distinguishable");
   assert.match(postures[3], /wss/);
 });
+
+/* ------------- action shape validation (review follow-up) --------- */
+
+test("malformed actions are refused before they reach the engine", async () => {
+  const { decode, isWellFormedAction } = await import("../src/net/protocol");
+
+  // The engine promises never to throw on bad input; it can only keep that
+  // promise if the shape was checked first.
+  assert.equal(isWellFormedAction({ type: "move", unitId: "u1" }), false, "no path");
+  assert.equal(isWellFormedAction({ type: "move", unitId: "u1", path: "north" }), false);
+  assert.equal(
+    isWellFormedAction({ type: "move", unitId: "u1", path: [{ x: 1 }] }), false, "no y");
+  assert.equal(
+    isWellFormedAction({ type: "move", unitId: "u1", path: [{ x: 1.5, y: 2 }] }), false,
+    "fractional coordinates");
+  assert.equal(isWellFormedAction({ type: "move", unitId: 7, path: [] }), false);
+  assert.equal(isWellFormedAction({ type: "build", unitType: "recon" }), false, "no tile");
+  assert.equal(isWellFormedAction({ type: "attack", unitId: "u1" }), false, "no target");
+  assert.equal(isWellFormedAction({ type: "teleport", unitId: "u1" }), false);
+  assert.equal(isWellFormedAction(null), false);
+  assert.equal(isWellFormedAction("endTurn"), false);
+
+  // A path long enough to be expensive to validate is refused outright.
+  const huge = Array.from({ length: 500 }, (_, i) => ({ x: i, y: 0 }));
+  assert.equal(isWellFormedAction({ type: "move", unitId: "u1", path: huge }), false);
+
+  // Well-formed ones pass.
+  assert.equal(
+    isWellFormedAction({ type: "move", unitId: "u1", path: [{ x: 1, y: 2 }] }), true);
+  assert.equal(isWellFormedAction({ type: "endTurn" }), true);
+  assert.equal(isWellFormedAction({ type: "build", unitType: "recon", at: { x: 0, y: 0 } }), true);
+
+  // And decode rejects the whole frame rather than passing it on.
+  assert.equal(decode(JSON.stringify({ t: "action", matchId: "m", action: { type: "move" } })), null);
+  assert.ok(decode(JSON.stringify({ t: "action", matchId: "m", action: { type: "endTurn" } })));
+});

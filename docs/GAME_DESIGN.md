@@ -71,6 +71,11 @@ luck       = integer 0–9, from the match's seeded RNG           (server only)
 damage     = floor((raw + luck) × mitigation)
 ```
 
+A unit can only be attacked if one of your units can **see** it. Artillery
+outranges its own vision, so it needs a spotter — which is what scouts are
+for. Firing into fog would otherwise be free, and the refusal would tell you
+whether something you remember is still there.
+
 Terrain defense scales with the defender's remaining HP, so a nearly-dead
 unit gets little benefit from cover. Luck is added before mitigation, so
 cover dampens lucky rolls too.
@@ -84,6 +89,16 @@ never 0 for a living unit). A defender that survives a **direct** attack
 counters using the same formula with roles swapped, its post-damage HP, and
 no luck roll. Indirect-fire units neither counter nor are countered, and may
 not move and fire in the same turn.
+
+## Moving into the unknown
+
+Walking into a unit you cannot see **stops you short** rather than being
+refused. This is the classic ambush, and it is also what keeps fog honest: if
+the order were refused you could probe a tile for free, submit-and-read, and
+map every hidden unit without spending anything. Stopping costs you the move.
+
+A unit you *can* see blocks the path outright — there is nothing to protect
+there, and refusing is the better UX.
 
 ## Capturing
 

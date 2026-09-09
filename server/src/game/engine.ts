@@ -12,6 +12,7 @@
 import { FACTIONS, loadMap, terrainStats, tileAt, unitStats } from "./data";
 import { canEngage, displayHp, resolveCombat } from "./combat";
 import { validatePath } from "./movement";
+import { isVisibleTo, visibleTiles } from "./vision";
 import type {
   Action,
   ActionResult,
@@ -51,7 +52,14 @@ function unitAt(state: MatchState, x: number, y: number): Unit | undefined {
 export interface CreateMatchOptions {
   matchId: string;
   mapId: string;
-  rngSeed?: number;
+  /**
+   * Required, not optional. The engine has no business sourcing randomness -
+   * it is supposed to be a pure function of its inputs, and a seed it picked
+   * itself with Math.random() would be predictable: luck is recoverable from
+   * the damage the server reports, so a weak seed leaks future rolls.
+   * MatchService supplies a cryptographically random one.
+   */
+  rngSeed: number;
 }
 
 export function createMatch(options: CreateMatchOptions): MatchState {
@@ -65,7 +73,7 @@ export function createMatch(options: CreateMatchOptions): MatchState {
     units: {},
     currentSlot: 0,
     roundNumber: 0,
-    rngSeed: options.rngSeed ?? Math.floor(Math.random() * 0x7fffffff),
+    rngSeed: options.rngSeed,
     rngCounter: 0,
     winnerSlot: null,
     version: 0,
@@ -123,6 +131,9 @@ export function addPlayer(
     directiveCharge: 0,
     defeated: false,
     connected: true,
+    // Nothing is known until it is seen; refreshKnownTiles fills in the
+    // player's own base as soon as the match starts.
+    knownTileOwners: new Array(next.map.tiles.length).fill(0),
   };
   next.players.push(player);
   next.version += 1;
@@ -134,9 +145,11 @@ export function addPlayer(
     next.currentSlot = 1;
     next.roundNumber = 1;
     const events = beginTurn(next, 1);
+    refreshKnownTiles(next);
     return { ok: true, state: next, events };
   }
 
+  refreshKnownTiles(next);
   return { ok: true, state: next, events: [] };
 }
 
@@ -153,6 +166,16 @@ export function applyAction(state: MatchState, slot: number, action: Action): Ac
   if (!player) return fail("not_a_player");
   if (player.defeated) return fail("player_defeated");
 
+  const result = dispatch(state, slot, action);
+
+  // Anything that moved a unit, took a building or ended a turn may have
+  // changed what each player can see. Recording it here, in one place, is
+  // what keeps the per-player ownership view honest.
+  if (result.ok) refreshKnownTiles(result.state);
+  return result;
+}
+
+function dispatch(state: MatchState, slot: number, action: Action): ActionResult {
   switch (action.type) {
     case "move":
       return doMove(state, slot, action.unitId, action.path);
@@ -168,6 +191,23 @@ export function applyAction(state: MatchState, slot: number, action: Action): Ac
       return doEndTurn(state, slot);
     default:
       return fail("unknown_action");
+  }
+}
+
+/**
+ * Updates each player's memory of tile ownership for everything they can
+ * currently see. Mutates in place - only ever called on an already-cloned
+ * state, like the other end-of-action helpers here.
+ */
+function refreshKnownTiles(state: MatchState): void {
+  for (const player of state.players) {
+    if (!Array.isArray(player.knownTileOwners)
+        || player.knownTileOwners.length !== state.map.tiles.length) {
+      player.knownTileOwners = new Array(state.map.tiles.length).fill(0);
+    }
+    for (const index of visibleTiles(state, player.slot)) {
+      player.knownTileOwners[index] = state.map.tiles[index].ownerSlot;
+    }
   }
 }
 
@@ -198,7 +238,9 @@ function doMove(state: MatchState, slot: number, unitId: string, path: Vec2[]): 
   const next = clone(state);
   const unit = next.units[unitId];
   const from: Vec2 = { x: unit.x, y: unit.y };
-  const to: Vec2 = path.length > 0 ? path[path.length - 1] : from;
+  // The walked path, not the submitted one - an ambush stops the unit short.
+  const walked = check.path;
+  const to: Vec2 = walked.length > 0 ? walked[walked.length - 1] : from;
 
   unit.x = to.x;
   unit.y = to.y;
@@ -211,7 +253,10 @@ function doMove(state: MatchState, slot: number, unitId: string, path: Vec2[]): 
   return {
     ok: true,
     state: next,
-    events: [{ type: "unitMoved", unitId, from, to, path, fuelSpent: check.cost }],
+    events: [{
+      type: "unitMoved", unitId, ownerSlot: unit.ownerSlot,
+      from, to, path: walked, fuelSpent: check.cost,
+    }],
   };
 }
 
@@ -225,7 +270,11 @@ function doAttack(
   if ("error" in found) return fail(found.error);
 
   const target = state.units[targetUnitId];
-  if (!target) return fail("no_such_target");
+  // One reason for "not there" and "cannot see it", so a rejection cannot be
+  // used to check whether a remembered unit is still alive, or to shell a
+  // tile the player has no eyes on. Artillery outranges its own vision and
+  // needs a spotter, which is the point of having scouts.
+  if (!target || !isVisibleTo(state, slot, target.x, target.y)) return fail("no_such_target");
   if (target.ownerSlot === slot) return fail("cannot_attack_own_unit");
 
   const stats = unitStats(found.unitType);
@@ -249,10 +298,15 @@ function doAttack(
       type: "unitAttacked",
       attackerId: unitId,
       defenderId: targetUnitId,
+      attackerSlot: attacker.ownerSlot,
+      defenderSlot: defender.ownerSlot,
       damage: outcome.damage,
       counterDamage: 0,
     });
-    events.push({ type: "unitDestroyed", unitId: targetUnitId, at: { x: defender.x, y: defender.y } });
+    events.push({
+      type: "unitDestroyed", unitId: targetUnitId, ownerSlot: defender.ownerSlot,
+      at: { x: defender.x, y: defender.y },
+    });
     delete next.units[targetUnitId];
   } else {
     attacker.hp -= outcome.counterDamage;
@@ -263,11 +317,16 @@ function doAttack(
       type: "unitAttacked",
       attackerId: unitId,
       defenderId: targetUnitId,
+      attackerSlot: attacker.ownerSlot,
+      defenderSlot: defender.ownerSlot,
       damage: outcome.damage,
       counterDamage: outcome.counterDamage,
     });
     if (attacker.hp <= 0) {
-      events.push({ type: "unitDestroyed", unitId, at: { x: attacker.x, y: attacker.y } });
+      events.push({
+        type: "unitDestroyed", unitId, ownerSlot: attacker.ownerSlot,
+        at: { x: attacker.x, y: attacker.y },
+      });
       delete next.units[unitId];
     }
   }
@@ -311,7 +370,10 @@ function doCapture(state: MatchState, slot: number, unitId: string): ActionResul
     nextTile.ownerSlot = slot;
     events.push({ type: "tileCaptured", x: unit.x, y: unit.y, bySlot: slot });
   } else {
-    events.push({ type: "captureProgressed", unitId, progress: unit.captureProgress });
+    events.push({
+      type: "captureProgressed", unitId, ownerSlot: unit.ownerSlot,
+      progress: unit.captureProgress,
+    });
   }
   next.version += 1;
 
@@ -356,7 +418,7 @@ function doBuild(state: MatchState, slot: number, unitType: string, at: Vec2): A
   return {
     ok: true,
     state: next,
-    events: [{ type: "unitBuilt", unitId: unit.id, unitType, at, cost }],
+    events: [{ type: "unitBuilt", unitId: unit.id, unitType, bySlot: slot, at, cost }],
   };
 }
 
@@ -431,7 +493,10 @@ function beginTurn(state: MatchState, slot: number): GameEvent[] {
       unit.fuel = Math.max(0, unit.fuel - drain);
       // Air and sea units that run dry are lost.
       if (drain > 0 && unit.fuel === 0) {
-        events.push({ type: "unitDestroyed", unitId: unit.id, at: { x: unit.x, y: unit.y } });
+        events.push({
+          type: "unitDestroyed", unitId: unit.id, ownerSlot: unit.ownerSlot,
+          at: { x: unit.x, y: unit.y },
+        });
         delete state.units[unit.id];
       }
     }

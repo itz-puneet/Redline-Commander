@@ -88,6 +88,14 @@ export interface Player {
   /** Set when the player has lost (HQ captured or no units left). */
   defeated: boolean;
   connected: boolean;
+  /**
+   * What this player has actually seen of who owns what, indexed like
+   * `map.tiles`. Sending the live ownership grid would undo the fog: a
+   * building changing hands in the dark pinpoints the enemy infantry that
+   * took it. Players see the last state they had eyes on, and find out it
+   * changed when they look again.
+   */
+  knownTileOwners: number[];
 }
 
 export type MatchPhase = "lobby" | "active" | "finished";
@@ -159,14 +167,32 @@ export type Action =
 /* Events: what actually happened, broadcast to clients for animation. */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Events carry the slot they concern. That is not redundant with the state:
+ * filtering happens against the state *after* the action, where a destroyed
+ * unit no longer exists to be looked up - so a filter that resolved ids
+ * would silently drop every event about a unit that just died, including
+ * from the player who owned it.
+ */
 export type GameEvent =
-  | { type: "unitMoved"; unitId: string; from: Vec2; to: Vec2; path: Vec2[]; fuelSpent: number }
-  | { type: "unitAttacked"; attackerId: string; defenderId: string; damage: number; counterDamage: number }
-  | { type: "unitDestroyed"; unitId: string; at: Vec2 }
+  | {
+      type: "unitMoved"; unitId: string; ownerSlot: number;
+      from: Vec2; to: Vec2; path: Vec2[]; fuelSpent: number;
+    }
+  | {
+      type: "unitAttacked"; attackerId: string; defenderId: string;
+      attackerSlot: number; defenderSlot: number;
+      damage: number; counterDamage: number;
+    }
+  | { type: "unitDestroyed"; unitId: string; ownerSlot: number; at: Vec2 }
   | { type: "tileCaptured"; x: number; y: number; bySlot: number }
-  | { type: "captureProgressed"; unitId: string; progress: number }
-  | { type: "unitBuilt"; unitId: string; unitType: string; at: Vec2; cost: number }
-  | { type: "turnStarted"; slot: number; roundNumber: number; income: number }
+  | { type: "captureProgressed"; unitId: string; ownerSlot: number; progress: number }
+  | {
+      type: "unitBuilt"; unitId: string; unitType: string; bySlot: number;
+      at: Vec2; cost: number;
+    }
+  /** `income` is redacted to null for anyone but the player whose turn it is. */
+  | { type: "turnStarted"; slot: number; roundNumber: number; income: number | null }
   | { type: "playerDefeated"; slot: number; reason: "hq_captured" | "no_units" }
   | { type: "matchFinished"; winnerSlot: number | null };
 

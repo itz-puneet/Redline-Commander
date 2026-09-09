@@ -12,7 +12,7 @@ import { test } from "node:test";
 import { addPlayer, applyAction, createMatch } from "../src/game/engine";
 import { reachableTiles, validatePath } from "../src/game/movement";
 import { baseDamage, displayHp } from "../src/game/combat";
-import { buildPlayerView } from "../src/game/view";
+import { buildPlayerView, filterEventsFor } from "../src/game/view";
 import { visibleTiles } from "../src/game/vision";
 import { UNITS, TERRAIN, DAMAGE_MATRIX, loadMap } from "../src/game/data";
 import type { MatchState, Unit } from "../src/game/types";
@@ -200,24 +200,57 @@ test("displayHp never shows a living unit as dead", () => {
   assert.equal(displayHp(0), 0);
 });
 
-test("artillery may not move and fire in the same turn", () => {
-  let state = startedMatch();
-  // Hand-place an artillery next to an enemy so the rule is what is under test.
-  const target = unitsOf(state, 2)[0];
-  state = structuredClone(state);
+/** Artillery out of range of its own eyes, with a scout lending it sight. */
+function spottedArtillery(): { state: MatchState; targetId: string } {
+  const base = startedMatch();
+  const target = unitsOf(base, 2)[0];
+  const state = structuredClone(base);
+
   state.units["arty"] = {
     id: "arty", unitType: "artillery", ownerSlot: 1,
     x: target.x, y: target.y - 2, hp: 100, fuel: 50, ammo: 9,
     hasMoved: true, hasActed: false, captureProgress: 0, cargo: [],
   };
+  // Artillery has vision 1 and range 2-3, so it cannot see what it shoots.
+  state.units["eyes"] = {
+    id: "eyes", unitType: "infantry", ownerSlot: 1,
+    x: target.x, y: target.y - 1, hp: 100, fuel: 99, ammo: null,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+  };
+  return { state, targetId: target.id };
+}
 
-  const blocked = applyAction(state, 1, { type: "attack", unitId: "arty", targetUnitId: target.id });
+test("artillery may not move and fire in the same turn", () => {
+  const { state, targetId } = spottedArtillery();
+
+  const blocked = applyAction(state, 1, { type: "attack", unitId: "arty", targetUnitId: targetId });
   assert.equal(blocked.ok, false);
   assert.equal(blocked.ok === false && blocked.reason, "indirect_cannot_move_and_fire");
 
   state.units["arty"].hasMoved = false;
-  const allowed = applyAction(state, 1, { type: "attack", unitId: "arty", targetUnitId: target.id });
+  const allowed = applyAction(state, 1, { type: "attack", unitId: "arty", targetUnitId: targetId });
   assert.ok(allowed.ok, allowed.ok === false ? allowed.reason : "");
+});
+
+test("artillery cannot shell what nobody can see", () => {
+  const { state, targetId } = spottedArtillery();
+  state.units["arty"].hasMoved = false;
+
+  // With the spotter, the shot lands.
+  const spotted = applyAction(state, 1, { type: "attack", unitId: "arty", targetUnitId: targetId });
+  assert.ok(spotted.ok, spotted.ok === false ? spotted.reason : "");
+
+  // Without it, the target is out of sight - and the refusal says only that,
+  // so it cannot be used to check whether a remembered unit is still there.
+  const blind = structuredClone(state);
+  delete blind.units["eyes"];
+  const unseen = applyAction(blind, 1, { type: "attack", unitId: "arty", targetUnitId: targetId });
+  assert.equal(unseen.ok, false);
+  assert.equal(unseen.ok === false && unseen.reason, "no_such_target");
+
+  // A target that genuinely does not exist is refused identically.
+  const ghost = applyAction(blind, 1, { type: "attack", unitId: "arty", targetUnitId: "no-such" });
+  assert.equal(ghost.ok === false && ghost.reason, "no_such_target");
 });
 
 /* ------------------------- fog of war ----------------------------- */
@@ -555,4 +588,192 @@ test("orphaned temp files are cleaned up rather than accumulating", async () => 
   const remaining = fs.readdirSync(dir);
   assert.equal(remaining.length, 1, `left ${JSON.stringify(remaining)}`);
   assert.ok(remaining[0].endsWith(".json"), "the real match must survive");
+});
+
+/* ------------------------------------------------------------------ */
+/* Fog of war: what each player is told (review follow-up)             */
+/* ------------------------------------------------------------------ */
+
+/** Two units in contact mid-map, with the rest of the board dark. */
+function contactState(): MatchState {
+  const state = structuredClone(startedMatch());
+  state.units = {
+    mine: {
+      id: "mine", unitType: "light_tank", ownerSlot: 1, x: 6, y: 4,
+      hp: 100, fuel: 70, ammo: 9,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+    theirs: {
+      id: "theirs", unitType: "anti_tank_infantry", ownerSlot: 2, x: 7, y: 4,
+      hp: 20, fuel: 70, ammo: 3,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+  };
+  return state;
+}
+
+test("the owner of a destroyed unit is still told it died", () => {
+  const state = contactState();
+  const result = applyAction(state, 1, {
+    type: "attack", unitId: "mine", targetUnitId: "theirs",
+  });
+  assert.ok(result.ok);
+  assert.ok(result.events.some((e) => e.type === "unitDestroyed"));
+
+  // The victim's own unit is gone from the post-action state, so a filter
+  // that resolved ids against it would tell them nothing at all.
+  const victim = filterEventsFor(result.state, 2, result.events);
+  assert.ok(victim.some((e) => e.type === "unitAttacked"),
+    "the player who was attacked must hear about it");
+  assert.ok(victim.some((e) => e.type === "unitDestroyed"),
+    "and must hear that their unit died");
+});
+
+test("an attacker killed by the counterattack still hears what happened", () => {
+  const state = contactState();
+  state.units["mine"].hp = 5;
+  state.units["theirs"].hp = 100;
+
+  const result = applyAction(state, 1, {
+    type: "attack", unitId: "mine", targetUnitId: "theirs",
+  });
+  assert.ok(result.ok);
+
+  const attacker = filterEventsFor(result.state, 1, result.events);
+  assert.ok(attacker.some((e) => e.type === "unitAttacked"),
+    "the player who submitted the action must get its result");
+});
+
+test("an enemy move is reported only as far as it was watched", () => {
+  const state = structuredClone(startedMatch());
+  state.units = {
+    watcher: {
+      id: "watcher", unitType: "infantry", ownerSlot: 1, x: 6, y: 4,
+      hp: 100, fuel: 99, ammo: null,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+    runner: {
+      id: "runner", unitType: "recon", ownerSlot: 2, x: 7, y: 4,
+      hp: 100, fuel: 80, ammo: null,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+  };
+  state.currentSlot = 2;
+
+  // Away along the road, out of the watcher's two-tile sight.
+  const result = applyAction(state, 2, {
+    type: "move", unitId: "runner",
+    path: [{ x: 8, y: 4 }, { x: 9, y: 4 }, { x: 10, y: 4 }, { x: 11, y: 4 }],
+  });
+  assert.ok(result.ok, result.ok === false ? result.reason : "");
+
+  const seen = filterEventsFor(result.state, 1, result.events);
+  const moved = seen.find((e) => e.type === "unitMoved");
+  assert.ok(moved && moved.type === "unitMoved", "the start of the move was visible");
+  assert.ok(moved.path.length < 4, `whole route leaked: ${JSON.stringify(moved.path)}`);
+  assert.ok(moved.path.every((p) => p.x <= 8),
+    `route beyond sight leaked: ${JSON.stringify(moved.path)}`);
+});
+
+test("the opponent's income is not broadcast", () => {
+  const state = startedMatch();
+  const result = applyAction(state, 1, { type: "endTurn" });
+  assert.ok(result.ok);
+
+  const own = filterEventsFor(result.state, 2, result.events)
+    .find((e) => e.type === "turnStarted");
+  assert.ok(own && own.type === "turnStarted");
+  assert.equal(typeof own.income, "number", "a player sees their own income");
+
+  const other = filterEventsFor(result.state, 1, result.events)
+    .find((e) => e.type === "turnStarted");
+  assert.ok(other && other.type === "turnStarted");
+  assert.equal(other.income, null,
+    "income reveals the building count, and funds follow from it exactly");
+});
+
+test("a build out of sight is not announced", () => {
+  const state = structuredClone(startedMatch());
+  state.players.find((p) => p.slot === 1)!.funds = 5000;
+  const factory = state.map.tiles.findIndex((t) => t.terrain === "factory" && t.ownerSlot === 1);
+  const at = { x: factory % state.map.width, y: Math.floor(factory / state.map.width) };
+
+  const result = applyAction(state, 1, { type: "build", unitType: "recon", at });
+  assert.ok(result.ok, result.ok === false ? result.reason : "");
+
+  assert.ok(filterEventsFor(result.state, 1, result.events).some((e) => e.type === "unitBuilt"));
+  assert.equal(
+    filterEventsFor(result.state, 2, result.events).some((e) => e.type === "unitBuilt"), false,
+    "the enemy's factory is across the map and in fog");
+});
+
+test("tile ownership is what a player has seen, not what is true", () => {
+  const state = startedMatch();
+  const view = buildPlayerView(state, 1);
+
+  const theirHq = state.map.tiles.findIndex(
+    (t) => TERRAIN[t.terrain].is_hq && t.ownerSlot === 2);
+  const myHq = state.map.tiles.findIndex(
+    (t) => TERRAIN[t.terrain].is_hq && t.ownerSlot === 1);
+
+  assert.equal(view.map.tileOwners[myHq], 1, "a player knows their own base");
+  assert.equal(view.map.tileOwners[theirHq], 0,
+    "the enemy base is across the map and has never been seen");
+  assert.equal(state.map.tiles[theirHq].ownerSlot, 2, "while the truth is unchanged");
+});
+
+test("walking into something unseen stops the unit instead of refusing the order", () => {
+  const state = structuredClone(startedMatch());
+  state.units = {
+    // A light tank sees two tiles, so the infantry five away really is
+    // hidden when the order is given.
+    mover: {
+      id: "mover", unitType: "light_tank", ownerSlot: 1, x: 4, y: 4,
+      hp: 100, fuel: 70, ammo: 9,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+    hidden: {
+      id: "hidden", unitType: "infantry", ownerSlot: 2, x: 9, y: 4,
+      hp: 100, fuel: 99, ammo: null,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+  };
+
+  const result = applyAction(state, 1, {
+    type: "move", unitId: "mover",
+    path: [{ x: 5, y: 4 }, { x: 6, y: 4 }, { x: 7, y: 4 }, { x: 8, y: 4 }, { x: 9, y: 4 }],
+  });
+
+  // Refusing would be a free oracle: submit a move, read the rejection, learn
+  // what is in the fog without spending anything.
+  assert.ok(result.ok, "the order is accepted, not refused");
+  const mover = result.state.units["mover"];
+  assert.equal(mover.x, 8, `stopped at ${mover.x},${mover.y} instead of short of the ambush`);
+  assert.equal(mover.hasMoved, true, "and it cost the unit its move");
+
+  const moved = result.events.find((e) => e.type === "unitMoved");
+  assert.ok(moved && moved.type === "unitMoved");
+  assert.deepEqual(moved.to, { x: 8, y: 4 }, "the event reports where it actually stopped");
+});
+
+test("a visible enemy still blocks a path outright", () => {
+  const state = structuredClone(startedMatch());
+  state.units = {
+    mover: {
+      id: "mover", unitType: "recon", ownerSlot: 1, x: 6, y: 4,
+      hp: 100, fuel: 80, ammo: null,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+    blocker: {
+      id: "blocker", unitType: "infantry", ownerSlot: 2, x: 7, y: 4,
+      hp: 100, fuel: 99, ammo: null,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    },
+  };
+
+  const result = applyAction(state, 1, {
+    type: "move", unitId: "mover", path: [{ x: 7, y: 4 }],
+  });
+  assert.equal(result.ok, false, "there is no information to protect here");
+  assert.equal(result.ok === false && result.reason, "path_blocked_by_enemy");
 });

@@ -23,8 +23,9 @@ export interface PlayerView {
     displayName: string;
     width: number;
     height: number;
-    /** Terrain is public knowledge; ownership and units are not. */
+    /** Terrain is public knowledge. */
     terrain: string[];
+    /** Ownership as far as this player has seen it - not the live grid. */
     tileOwners: number[];
   };
   players: {
@@ -57,6 +58,7 @@ function redactEnemy(unit: Unit): Partial<Unit> {
 export function buildPlayerView(state: MatchState, slot: number): PlayerView {
   const visible = visibleTiles(state, slot);
   const width = state.map.width;
+  const viewer = state.players.find((p) => p.slot === slot);
 
   const units: Partial<Unit>[] = [];
   for (const unit of Object.values(state.units)) {
@@ -81,7 +83,13 @@ export function buildPlayerView(state: MatchState, slot: number): PlayerView {
       width: state.map.width,
       height: state.map.height,
       terrain: state.map.tiles.map((t) => t.terrain),
-      tileOwners: state.map.tiles.map((t) => t.ownerSlot),
+      // What this player has seen, not what is true right now. Sending the
+      // live grid would undo the fog: a building changing hands in the dark
+      // pinpoints the enemy infantry that took it. The fallback covers
+      // matches saved before ownership was remembered per player.
+      tileOwners: viewer?.knownTileOwners?.length === state.map.tiles.length
+        ? [...viewer.knownTileOwners]
+        : state.map.tiles.map((t) => t.ownerSlot),
     },
     players: state.players.map((p) => ({
       slot: p.slot,
@@ -97,9 +105,18 @@ export function buildPlayerView(state: MatchState, slot: number): PlayerView {
 }
 
 /**
- * Events are filtered too: a player should not learn that an enemy moved
- * somewhere they cannot see. An event is delivered if any tile it touches is
- * visible to the player, or it concerns one of their own units.
+ * Events are redacted per player, not merely filtered.
+ *
+ * Filtering alone is not enough, because several events carry information
+ * the view itself withholds: a move's full path (including a destination in
+ * fog), the opponent's income (from which their hidden funds follow exactly),
+ * and what was built where. Each of those is cut down here rather than
+ * dropped, so the player learns what they saw and nothing more.
+ *
+ * Ownership is read off the event rather than looked up in the state,
+ * because this runs against the state *after* the action - where a unit that
+ * just died no longer exists, and a lookup would silently drop every event
+ * about it, including from the player who owned it.
  */
 export function filterEventsFor(
   state: MatchState,
@@ -109,21 +126,62 @@ export function filterEventsFor(
   const visible = visibleTiles(state, slot);
   const width = state.map.width;
   const seen = (x: number, y: number) => visible.has(y * width + x);
-  const ownUnit = (id?: string) => (id ? state.units[id]?.ownerSlot === slot : false);
+  const out: import("./types").GameEvent[] = [];
 
-  return events.filter((event) => {
+  for (const event of events) {
     switch (event.type) {
-      case "unitMoved":
-        return ownUnit(event.unitId) || event.path.some((p) => seen(p.x, p.y)) || seen(event.from.x, event.from.y);
+      case "unitMoved": {
+        if (event.ownerSlot === slot) {
+          out.push(event);
+          break;
+        }
+        // Only the tiles actually watched. A route that ducks into fog ends,
+        // for this player, where they lost sight of it.
+        const watched = event.path.filter((p) => seen(p.x, p.y));
+        if (watched.length === 0 && !seen(event.from.x, event.from.y)) break;
+        out.push({
+          ...event,
+          path: watched,
+          to: watched.length > 0 ? watched[watched.length - 1] : event.from,
+        });
+        break;
+      }
+
       case "unitAttacked":
-        return ownUnit(event.attackerId) || ownUnit(event.defenderId);
+        // In a two-player match every fight involves the viewer; with teams
+        // it would not, and a fight between two others is not their business.
+        if (event.attackerSlot === slot || event.defenderSlot === slot) out.push(event);
+        break;
+
       case "unitDestroyed":
-        return seen(event.at.x, event.at.y);
+        if (event.ownerSlot === slot || seen(event.at.x, event.at.y)) out.push(event);
+        break;
+
       case "captureProgressed":
-        return ownUnit(event.unitId);
+        if (event.ownerSlot === slot) out.push(event);
+        break;
+
+      case "tileCaptured":
+        // A capture in fog would otherwise pinpoint an enemy infantry.
+        if (event.bySlot === slot || seen(event.x, event.y)) out.push(event);
+        break;
+
+      case "unitBuilt":
+        if (event.bySlot === slot || seen(event.at.x, event.at.y)) out.push(event);
+        break;
+
+      case "turnStarted":
+        // Income is the opponent's building count, and their funds follow
+        // from it exactly - which the view goes to the trouble of hiding.
+        out.push(event.slot === slot ? event : { ...event, income: null });
+        break;
+
       default:
-        // Turn changes, captures, builds, defeats and match end are public.
-        return true;
+        // Defeats and the end of the match are public by nature.
+        out.push(event);
+        break;
     }
-  });
+  }
+
+  return out;
 }
