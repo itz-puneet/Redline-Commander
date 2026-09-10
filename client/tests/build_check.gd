@@ -87,11 +87,16 @@ func _check_costs() -> void:
 		factory.has("infantry") and factory.has("heavy_tank")
 		and not factory.has("fighter_jet") and not factory.has("transport_ship"),
 		"got %s" % [factory])
-	_check("airports build aircraft",
-		GameData.buildable_at("airport") == ["helicopter", "fighter_jet"],
-		"got %s" % [GameData.buildable_at("airport")])
-	_check("ports build ships",
-		GameData.buildable_at("port") == ["transport_ship"])
+	_check("airports build every unit whose built_at says airport",
+		GameData.buildable_at("airport") == _declared_for("airport"),
+		"got %s, table says %s" % [GameData.buildable_at("airport"), _declared_for("airport")])
+	_check("ports build every unit whose built_at says port",
+		GameData.buildable_at("port") == _declared_for("port"),
+		"got %s, table says %s" % [GameData.buildable_at("port"), _declared_for("port")])
+	_check("airports and ports do not build the same things",
+		GameData.buildable_at("airport") != GameData.buildable_at("port"))
+	_check("every unit is built somewhere", _unbuildable().is_empty(),
+		"built nowhere: %s" % str(_unbuildable()))
 	_check("a city builds nothing", GameData.buildable_at("city").is_empty())
 
 
@@ -147,7 +152,9 @@ func _check_menu_contents() -> void:
 	# Reopening must not accumulate the previous tile's options.
 	_menu.open_for("airport", AIRPORT, 5000, "crimson_alliance")
 	_check("reopening replaces the options rather than appending",
-		_menu.option_count() == 2, "%d options" % _menu.option_count())
+		_menu.option_count() == _declared_for("airport").size(),
+		"%d options for %d airport units"
+			% [_menu.option_count(), _declared_for("airport").size()])
 	_check("and the menu knows which tile it is for", _menu.tile() == AIRPORT)
 
 	# The panel sizes to its options: a factory with seven needs more room
@@ -250,3 +257,21 @@ func _check_menu_closes() -> void:
 	_check("a unit appearing on the tile closes the menu",
 		not _controller.build_menu_is_open())
 	_phases += 1
+
+
+## What the shared table says a building produces, read independently of
+## GameData.buildable_at() so the two can disagree.
+func _declared_for(terrain_id: String) -> Array:
+	var types: Array = []
+	for unit_type in GameData.units:
+		if String(terrain_id) in (GameData.units[unit_type] as Dictionary).get("built_at", []):
+			types.append(unit_type)
+	return types
+
+
+func _unbuildable() -> Array:
+	var orphans: Array = []
+	for unit_type in GameData.units:
+		if (GameData.units[unit_type] as Dictionary).get("built_at", []).is_empty():
+			orphans.append(unit_type)
+	return orphans

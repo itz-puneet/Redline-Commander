@@ -1,0 +1,90 @@
+{
+  "id": "straits",
+  "display_name": "Cinder Straits",
+  "max_players": 2,
+  "width": 18,
+  "height": 12,
+  "_legend": {
+    "p": "plains",
+    "r": "road",
+    "f": "forest",
+    "m": "mountain",
+    "v": "river",
+    "s": "shallow_water",
+    "d": "deep_water",
+    "e": "reef",
+    "C": "city",
+    "F": "factory",
+    "A": "airport",
+    "P": "port",
+    "H": "hq"
+  },
+  "tiles": [
+    "HCFppfpmmppfppCppA",
+    "CrrrpppfppfppprrpC",
+    "prPppCppppppCppPrp",
+    "prrppsssepessspprp",
+    "ppsssdddsseddsssrp",
+    "psddddeessseddddsp",
+    "psddddessseeddddsp",
+    "prsssddessdddssspp",
+    "prppsssepessspprrp",
+    "prPppCppppppCppPrp",
+    "CprrpppfppfppprrrC",
+    "AppCppfppmmpfppFCH"
+  ],
+  "_tile_owners_comment": "Ownership is by index: 0 = neutral, 1 = player slot 1, 2 = player slot 2. Only capturable tiles may be non-zero.",
+  "tile_owners": [
+    "111000000000000001",
+    "100000000000000000",
+    "001000000000000000",
+    "000000000000000000",
+    "000000000000000000",
+    "000000000000000000",
+    "000000000000000000",
+    "000000000000000000",
+    "000000000000000000",
+    "000000000000000200",
+    "000000000000000002",
+    "200000000000000222"
+  ],
+  "start_units": [
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 1,
+      "y": 1
+    },
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 3,
+      "y": 2
+    },
+    {
+      "slot": 1,
+      "unit_type": "recon",
+      "x": 5,
+      "y": 1
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 16,
+      "y": 10
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 14,
+      "y": 9
+    },
+    {
+      "slot": 2,
+      "unit_type": "recon",
+      "x": 12,
+      "y": 10
+    }
+  ],
+  "_note": "A naval map: two coasts either side of a deep channel, with reefs and shallows shaping where ships can go, and a one-tile causeway at each edge so foot units can still reach the far side. Rotationally symmetric, so the two sides are identical without being mirror images. Each player starts owning an HQ, factory, airport and port, so every unit type is buildable from turn one."
+}

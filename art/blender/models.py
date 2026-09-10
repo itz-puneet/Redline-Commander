@@ -68,6 +68,19 @@ def _soldier(team_torso=True):
     ]
 
 
+def _boat(length, width, deck_width, deck_length):
+    """A hull, a raked bow and a deck. Shared by everything that floats."""
+    return [
+        {"shape": "box", "loc": (0.0, 0.04, 0.11), "size": (width, length, 0.14),
+         "mat": "dark"},
+        {"shape": "cone", "loc": (0.0, -(length / 2.0 + 0.04), 0.11),
+         "size": (width / 2.0, width / 2.0, 0.26), "rot": (90.0, 0.0, 0.0),
+         "mat": "dark"},
+        {"shape": "box", "loc": (0.0, 0.0, 0.21), "size": (deck_width, deck_length, 0.05),
+         "mat": "team"},
+    ]
+
+
 MODELS = {
     # A lone upright figure - the smallest silhouette on the board, and the
     # only one with a visible head.
@@ -204,5 +217,106 @@ MODELS = {
          "mat": "glass"},
         {"shape": "cylinder", "loc": (0.0, 0.36, 0.56), "size": (0.012, 0.012, 0.26),
          "mat": "dark"},
+    ],
+
+    # Between the light and heavy tank, and turned off-axis so it is not
+    # simply "the light tank again but bigger" - the angled turret is what
+    # separates the three tanks at a glance.
+    "medium_tank": [
+        {"shape": "box", "loc": (0.0, 0.0, 0.18), "size": (0.48, 0.64, 0.18),
+         "mat": "team"},
+        {"shape": "box", "loc": (0.0, 0.05, 0.34), "size": (0.36, 0.34, 0.16),
+         "rot": (0.0, 0.0, 16.0), "mat": "team"},
+        {"shape": "cylinder", "loc": (-0.09, -0.28, 0.34), "size": (0.045, 0.045, 0.46),
+         "rot": (90.0, 0.0, 16.0), "mat": "dark"},
+        {"shape": "box", "loc": (0.0, 0.28, 0.31), "size": (0.24, 0.10, 0.10),
+         "mat": "light"},
+    ] + _treads(0.27, 0.64),
+
+    # A boxy launcher pod raised off the back of a wheeled chassis. Nothing
+    # else on the board is a rectangle standing on end.
+    "rocket_artillery": [
+        {"shape": "box", "loc": (0.0, 0.02, 0.17), "size": (0.40, 0.58, 0.16),
+         "mat": "team"},
+        {"shape": "box", "loc": (0.0, -0.20, 0.30), "size": (0.30, 0.18, 0.14),
+         "mat": "light"},
+        {"shape": "box", "loc": (0.0, 0.14, 0.42), "size": (0.34, 0.30, 0.26),
+         "rot": (-34.0, 0.0, 0.0), "mat": "dark"},
+        {"shape": "box", "loc": (0.0, 0.14, 0.42), "size": (0.36, 0.06, 0.28),
+         "rot": (-34.0, 0.0, 0.0), "mat": "team"},
+    ] + _wheels(0.21, (-0.19, 0.02, 0.22)),
+
+    # Straight wings and two engines, against the fighter's swept delta:
+    # from above, wing shape is the only thing telling two aircraft apart.
+    "bomber": [
+        {"shape": "cylinder", "loc": (0.0, 0.0, 0.44), "size": (0.11, 0.11, 0.74),
+         "rot": (90.0, 0.0, 0.0), "mat": "team"},
+        {"shape": "sphere", "loc": (0.0, -0.40, 0.44), "size": (0.11, 0.16, 0.11),
+         "mat": "glass"},
+        {"shape": "box", "loc": (0.0, 0.02, 0.42), "size": (1.00, 0.24, 0.035),
+         "mat": "team"},
+        {"shape": "cylinder", "loc": (-0.30, 0.0, 0.38), "size": (0.055, 0.055, 0.24),
+         "rot": (90.0, 0.0, 0.0), "mat": "dark"},
+        {"shape": "cylinder", "loc": (0.30, 0.0, 0.38), "size": (0.055, 0.055, 0.24),
+         "rot": (90.0, 0.0, 0.0), "mat": "dark"},
+        {"shape": "box", "loc": (0.0, 0.34, 0.44), "size": (0.40, 0.14, 0.03),
+         "mat": "light"},
+        {"shape": "box", "loc": (0.0, 0.36, 0.54), "size": (0.03, 0.16, 0.16),
+         "mat": "light"},
+    ],
+
+    # The smallest thing in the air, with a propeller disc no other unit has.
+    "scout_plane": [
+        {"shape": "cylinder", "loc": (0.0, 0.02, 0.40), "size": (0.065, 0.065, 0.44),
+         "rot": (90.0, 0.0, 0.0), "mat": "team"},
+        {"shape": "box", "loc": (0.0, -0.02, 0.48), "size": (0.68, 0.15, 0.028),
+         "mat": "team"},
+        {"shape": "sphere", "loc": (0.0, -0.06, 0.44), "size": (0.06, 0.10, 0.05),
+         "mat": "glass"},
+        {"shape": "cylinder", "loc": (0.0, -0.25, 0.40), "size": (0.14, 0.14, 0.02),
+         "rot": (90.0, 0.0, 0.0), "mat": "dark"},
+        {"shape": "box", "loc": (0.0, 0.22, 0.40), "size": (0.26, 0.10, 0.02),
+         "mat": "light"},
+        {"shape": "box", "loc": (0.0, 0.23, 0.47), "size": (0.02, 0.11, 0.12),
+         "mat": "light"},
+    ],
+
+    # Short, open and quick - it reads as small next to the other two ships,
+    # which is exactly what it is.
+    "patrol_boat": _boat(0.56, 0.30, 0.26, 0.42) + [
+        {"shape": "cylinder", "loc": (0.0, -0.14, 0.30), "size": (0.095, 0.095, 0.14),
+         "mat": "light"},
+        {"shape": "cylinder", "loc": (0.0, -0.20, 0.40), "size": (0.028, 0.028, 0.30),
+         "rot": (34.0, 0.0, -20.0), "mat": "dark"},
+        {"shape": "cylinder", "loc": (0.0, 0.16, 0.38), "size": (0.012, 0.012, 0.26),
+         "mat": "dark"},
+    ],
+
+    # The anti-air of the sea, and shaped to say so: the same steeply
+    # elevated twin mounts, on a hull.
+    "escort": _boat(0.76, 0.34, 0.30, 0.60) + [
+        {"shape": "box", "loc": (0.0, 0.10, 0.32), "size": (0.22, 0.26, 0.18),
+         "mat": "light"},
+        {"shape": "cylinder", "loc": (-0.06, -0.20, 0.40), "size": (0.026, 0.026, 0.34),
+         "rot": (22.0, 0.0, 0.0), "mat": "dark"},
+        {"shape": "cylinder", "loc": (0.06, -0.20, 0.40), "size": (0.026, 0.026, 0.34),
+         "rot": (22.0, 0.0, 0.0), "mat": "dark"},
+        {"shape": "box", "loc": (0.0, 0.10, 0.46), "size": (0.04, 0.16, 0.16),
+         "rot": (0.0, 26.0, 0.0), "mat": "dark"},
+        {"shape": "cylinder", "loc": (0.0, 0.26, 0.44), "size": (0.012, 0.012, 0.30),
+         "mat": "dark"},
+    ],
+
+    # Artillery that floats, and drawn like it: the same barrels traversed
+    # hard across the view, so its role reads before its outline does.
+    "monitor": _boat(0.72, 0.38, 0.32, 0.54) + [
+        {"shape": "box", "loc": (0.0, -0.10, 0.36), "size": (0.30, 0.28, 0.18),
+         "mat": "team"},
+        {"shape": "cylinder", "loc": (-0.10, -0.20, 0.50), "size": (0.036, 0.036, 0.52),
+         "rot": (76.0, 0.0, -36.0), "mat": "dark"},
+        {"shape": "cylinder", "loc": (-0.04, -0.26, 0.50), "size": (0.036, 0.036, 0.52),
+         "rot": (76.0, 0.0, -36.0), "mat": "dark"},
+        {"shape": "box", "loc": (0.0, 0.22, 0.34), "size": (0.22, 0.20, 0.20),
+         "mat": "light"},
     ],
 }

@@ -7,6 +7,13 @@
       "max_players": 2,
       "size": "15x10",
       "summary": "Symmetric land map. A river with three crossings and four neutral cities in the midfield."
+    },
+    {
+      "id": "straits",
+      "display_name": "Cinder Straits",
+      "max_players": 2,
+      "size": "18x12",
+      "summary": "Naval map. A deep channel with reefs and shallows divides two coasts, joined by a causeway at each edge."
     }
   ]
 }

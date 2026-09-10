@@ -46,8 +46,18 @@ func _check_autoloads() -> void:
 
 
 func _check_data_tables() -> void:
-	_check("units.json loaded", GameData.units.size() == 10,
+	_check("units.json loaded", GameData.units.size() >= 10,
 		"got %d unit types" % GameData.units.size())
+	# Shape rather than count: a table that grows should not fail a test,
+	# but a unit missing a field the board reads should.
+	var malformed: Array = []
+	for unit_type in GameData.units:
+		for field in ["display_name", "cost", "move", "move_type", "vision",
+				"fire_mode", "min_range", "max_range", "built_at"]:
+			if not (GameData.units[unit_type] as Dictionary).has(field):
+				malformed.append("%s is missing %s" % [unit_type, field])
+	_check("every unit carries the fields the client reads",
+		malformed.is_empty(), str(malformed))
 	_check("terrain.json loaded", GameData.terrain.size() == 13,
 		"got %d terrain types" % GameData.terrain.size())
 	_check("factions.json loaded", GameData.factions.size() == 5,

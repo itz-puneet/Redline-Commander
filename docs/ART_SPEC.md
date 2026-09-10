@@ -62,8 +62,8 @@ and they cost one render setting rather than ten models.
 
 | Path | Format | Size |
 |---|---|---|
-| `client/assets/units/units.png` | PNG, RGBA8, straight (non-premultiplied) alpha | **640 x 64** |
-| `client/assets/units/units_mask.png` | PNG, RGBA8 | **640 x 64** |
+| `client/assets/units/units.png` | PNG, RGBA8, straight (non-premultiplied) alpha | **1088 x 64** |
+| `client/assets/units/units_mask.png` | PNG, RGBA8 | **1088 x 64** |
 | `client/assets/units/units.json` | JSON manifest | - |
 
 All three are generated. Never edit them by hand.
@@ -74,7 +74,8 @@ All three are generated. Never edit them by hand.
   order `shared/data/units.json` declares them.
 - **Tile: 48 x 48 px.** The cell is centred on the tile, so the extra 8px on
   each side is overhang room for a rotor or a gun barrel.
-- Sheet width is `64 x <number of unit types>`. Ten types today, so 640.
+- Sheet width is `64 x <number of unit types>`. Seventeen types today, so
+  1088. It grows whenever a unit is added, which is why nothing hardcodes it.
 - A unit's footprint should sit inside the central 48 x 48; only silhouette
   extras may overhang into the rest of the cell.
 - **The outermost 1px ring of every cell must be fully transparent.** A
@@ -210,9 +211,15 @@ overlap without muddying - a turn produces several at once.
 
 ## Maps
 
-Not art, but content, and the same bottleneck. One map exists
-(`shared/data/maps/crossing.json`, 15 x 10, two players). The roadmap asks
-for three to five, including a naval one - no current map has water.
+Not art, but content, and the same bottleneck. Two maps exist:
+`crossing` (15 x 10, land only) and `straits` (18 x 12, naval). The roadmap
+asks for three to five.
+
+`server/test/data.test.ts` walks every map in the index and refuses one that
+is not playable - an HQ no foot unit can reach, a start unit standing on
+terrain it cannot enter, or a player without an HQ. It also fails if any
+unit type is buildable on no map at all, which is the state the transport
+ship sat in for months.
 
 A map is a JSON file in `shared/data/maps/` plus an entry in
 `shared/data/maps/index.json`. The index is explicit rather than a directory

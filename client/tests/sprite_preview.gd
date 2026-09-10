@@ -22,10 +22,19 @@ const SLOT_B := 2
 ## than this on any channel. Above the render's own noise, well below the
 ## distance between the two faction colours.
 const DIFFERENCE := 0.08
-## The tinted-pixel count is compared against the mask's own team-pixel
-## count. They will not match exactly - the shader blends partial mask values
-## on antialiased edges - but a mis-mapped UV would miss by far more.
-const COUNT_TOLERANCE := 0.15
+## The tinted count is bounded by the mask rather than compared to it
+## within some tolerance. The shader cannot touch a pixel the mask leaves at
+## zero, so the number of pixels with *any* mask coverage is a hard ceiling;
+## and a working tint must reach most of the pixels the mask marks solidly,
+## which is the floor. Both come out of the mask itself, so neither is a
+## number picked to make the current art pass.
+##
+## A symmetric tolerance was tried first and had to go: the escort's faction
+## area is the smallest on the sheet, so its antialiased perimeter is a large
+## share of it, and it overshot a 15% band while being perfectly correct.
+const SOLID_MASK := 0.5
+const ANY_MASK := 0.02
+const MIN_SOLID_TINTED := 0.6
 
 var _failures := 0
 
@@ -74,12 +83,18 @@ func _run() -> void:
 	var mismatched: Array = []
 	var untinted: Array = []
 	for index in types.size():
-		var expected := _team_pixels(mask, int(UnitSprites.region_for(types[index]).position.x), cell)
+		var origin := int(UnitSprites.region_for(types[index]).position.x)
+		var solid := _team_pixels(mask, origin, cell, SOLID_MASK)
+		var reachable := _team_pixels(mask, origin, cell, ANY_MASK)
 		var actual := _changed_pixels(rendered_a, rendered_b, index * cell, cell)
 		if actual == 0:
 			untinted.append(types[index])
-		elif absf(float(actual - expected)) / maxf(float(expected), 1.0) > COUNT_TOLERANCE:
-			mismatched.append("%s: masked %d, tinted %d" % [types[index], expected, actual])
+		elif actual > reachable:
+			mismatched.append("%s: tinted %d pixels, but only %d have any mask"
+				% [types[index], actual, reachable])
+		elif float(actual) < float(solid) * MIN_SOLID_TINTED:
+			mismatched.append("%s: only %d of %d solidly masked pixels tinted"
+				% [types[index], actual, solid])
 
 	# If the tint applied to nothing, the shader is not running, the mask
 	# never reached it, or every faction renders identically.
@@ -131,12 +146,15 @@ func _render_row(types: Array, slot: int) -> Image:
 	return image
 
 
-func _team_pixels(mask: Image, origin: int, cell: int) -> int:
+## Pixels the mask marks at least `threshold` strongly. At SOLID_MASK that
+## is the faction area proper; at ANY_MASK it also takes in the antialiased
+## rim, which is the most the shader could possibly repaint.
+func _team_pixels(mask: Image, origin: int, cell: int, threshold: float) -> int:
 	var count := 0
 	for y in cell:
 		for x in cell:
 			var pixel := mask.get_pixel(origin + x, y)
-			if pixel.a > 0.5 and pixel.r > 0.5:
+			if pixel.a > threshold and pixel.r > threshold:
 				count += 1
 	return count
 

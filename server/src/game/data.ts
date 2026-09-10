@@ -91,6 +91,23 @@ export interface LoadedMap {
   startUnits: { slot: number; unitType: string; at: Vec2 }[];
 }
 
+export interface MapIndexEntry {
+  id: string;
+  display_name: string;
+  max_players: number;
+  size: string;
+  summary: string;
+}
+
+/**
+ * The maps the lobby offers. An explicit index rather than a directory scan
+ * because Godot cannot list res:// from an exported PCK - a map not listed
+ * here is invisible in a real Android build, so this is the list that
+ * matters and the one the tests walk.
+ */
+export const MAP_INDEX: MapIndexEntry[] =
+  readJson<{ maps: MapIndexEntry[] }>("maps", "index.json").maps;
+
 export function loadMap(mapId: string): LoadedMap {
   const raw = readJson<MapFile>("maps", `${mapId}.json`);
 

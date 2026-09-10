@@ -53,6 +53,13 @@ const UNIT_LABELS := {
 	"helicopter": "HEL",
 	"fighter_jet": "JET",
 	"transport_ship": "TRN",
+	"medium_tank": "MTK",
+	"rocket_artillery": "ROC",
+	"bomber": "BMB",
+	"scout_plane": "SCT",
+	"patrol_boat": "PBT",
+	"escort": "ESC",
+	"monitor": "MON",
 }
 
 const GRID_LINE := Color(0, 0, 0, 0.14)

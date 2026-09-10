@@ -69,7 +69,11 @@ Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
       directly than to render. One 1584x48 sheet as things stand; give it a
       generated manifest first, so the tile order is not an implicit
       contract with `terrain.json`'s key order.
-- [ ] 3–5 multiplayer maps, including a naval one (`crossing` has no water)
+- [x] A naval map (`straits`): two coasts, a deep channel with reefs and
+      shallows, and a causeway at each edge so foot units can still cross.
+      Every map in the index is checked for playability by
+      `server/test/data.test.ts`.
+- [ ] 3–5 multiplayer maps. Two so far (`crossing`, `straits`).
 - [ ] Campaign missions 1–3
 
 ## Phase 5 — Polish and ship
