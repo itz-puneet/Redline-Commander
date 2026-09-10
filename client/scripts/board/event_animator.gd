@@ -223,7 +223,7 @@ func _show_damage(at: Vector2, amount: int) -> void:
 	var label := Label.new()
 	label.text = "-%d" % GameData.display_hp(amount)
 	label.position = at + Vector2(0, -6)
-	label.size = Vector2(BoardTheme.TILE_SIZE, 16)
+	label.size = Vector2(BoardTheme.TILE_SIZE, BoardTheme.TILE_SIZE * 0.33)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_color_override("font_color", Color("#ffe08a"))
 	label.add_theme_font_size_override("font_size", 12)

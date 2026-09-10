@@ -13,7 +13,10 @@ extends Camera2D
 ##
 ## Uses _unhandled_input so HUD controls get first refusal on every event.
 
-const MIN_ZOOM := 0.5
+# Lowered when TILE_SIZE went to 48: the same map is half again as many
+# world pixels, so the zoom that frames a large one is proportionally
+# smaller and would otherwise hit the floor and crop.
+const MIN_ZOOM := 0.35
 const MAX_ZOOM := 4.0
 ## A gesture that travels further than this is a pan, not a tap.
 const DRAG_THRESHOLD := 8.0

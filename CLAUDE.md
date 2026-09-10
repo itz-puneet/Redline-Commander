@@ -98,7 +98,24 @@ layout of the code, so keep them that way.
    rejections rather than dying. Never add an `async` event listener without
    a `.catch`.
 
-8. **A match is a persisted record, not a live connection.** Players drop,
+8. **Art is generated, and its source is text.** Unit sprites are rendered
+   from `art/blender/models.py` by `tools/render-sprites.sh` into
+   `client/assets/units/`, which is committed - you can build and play
+   without Blender installed. Never edit the sheet, the mask or the manifest
+   by hand; change the model and re-render, and `--check` will confirm the
+   two still agree.
+
+   One sheet serves every faction: it is rendered in neutral grey with a
+   companion mask, and the client tints through the mask
+   (`client/shaders/team_tint.gdshader`). Adding a faction is a colour in
+   `BoardTheme.SLOT_COLORS`, not another ten renders - so do not add a
+   per-faction sheet.
+
+   Everything under `art/` must be original geometry. A mesh from an asset
+   library or another game carries its licence into the sprite and into this
+   repository; that is the hard rule above, not a preference.
+
+9. **A match is a persisted record, not a live connection.** Players drop,
    background the app, and take their turn hours later. Committed turns are
    written through `MatchStore` before being acknowledged, and a seat is keyed
    to a stable `playerId`, never a socket id.
@@ -108,8 +125,12 @@ layout of the code, so keep them that way.
 Playable end to end: connect, create or join a match by code, and fight it
 out - board, fog, touch input, animated moves and combat, production, and a HUD
 with a damage forecast, all validated by the server and verified against a
-real one by `tools/live-check.sh`. Still
-missing before it is a game: art, more maps, and a campaign.
+real one by `tools/live-check.sh`.
+
+Units are drawn from a rendered sprite sheet, tinted per faction. The models
+behind it are deliberate blockouts: the pipeline that produces them is
+finished and checked, the modelling is not. Still missing before it is a
+game: finished unit art, terrain art, more maps, and a campaign.
 
 Devices authenticate on connect (trust on first use, see `server/src/auth`),
 the server refuses unencrypted connections from anything but loopback, and
@@ -142,6 +163,7 @@ godot --headless res://tests/lobby_check.tscn   # the lobby and screen routing
 godot --headless res://tests/animation_check.tscn  # event animation
 godot --headless res://tests/build_check.tscn   # production costs and the build menu
 godot --headless res://tests/hud_check.tscn     # damage forecast, panels, banner
+godot --headless res://tests/sprite_check.tscn # the unit sheet covers every unit type
 
 # These need a real renderer - use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
@@ -149,11 +171,19 @@ xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/lobby_preview.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/animation_preview.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/build_preview.tscn
+# The tint shader: only a real rasteriser can prove the mask lines up.
+xvfb-run -a godot --resolution 1280x720 res://tests/sprite_preview.tscn
 
 # End to end against a real server: builds, hosts a match, runs the client.
 tools/live-check.sh
 tools/live-check.sh --tls   # the same, over wss:// with a generated cert
 tools/dev-cert.sh           # a self-signed cert for local wss:// testing
+
+# Unit art. Needs Blender on the PATH; the sheet is committed, so this is
+# only for changing it. See art/README.md.
+tools/render-sprites.sh
+tools/render-sprites.sh --check     # fail if the committed sheet is stale
+tools/render-sprites.sh --preview   # a magnified look, into .preview/
 ```
 
 Two Godot gotchas worth knowing:

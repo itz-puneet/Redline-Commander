@@ -21,3 +21,9 @@ server/.matches/
 # OS
 .DS_Store
 Thumbs.db
+
+# Magnified renders from tools/render-sprites.sh --preview.
+.preview/
+
+# Byte-compiled tooling.
+__pycache__/

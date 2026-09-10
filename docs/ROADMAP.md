@@ -2,9 +2,8 @@
 
 ## Status
 
-The rules engine and networking work and are tested. There is **no rendering
-and no UI** — you cannot see or play a match yet, only drive one through the
-protocol.
+Playable end to end, with rendered unit art. What is missing is content:
+finished models, terrain art, more maps, and a campaign.
 
 ## Phase 0 — Setup ✅
 - [x] Repo structure, docs, `CLAUDE.md` guardrails
@@ -54,9 +53,17 @@ protocol.
 - [ ] Faction Field Directives (in `factions.json`; not wired into the engine)
 
 ## Phase 4 — Content (next up)
-- [ ] Original sprite art for all v1 units, two factions minimum — this is
-      the one part that genuinely cannot be scaffolded; commission, draw or
-      generate art that is yours
+- [x] A sprite pipeline: models in `art/blender/`, rendered by
+      `tools/render-sprites.sh` into a sheet plus a faction mask, tinted on
+      the client through one shader. Proven end to end and checked
+      (`sprite_check`, `sprite_preview`, `--check`). See `art/README.md`.
+- [ ] Replace the blockout models with finished unit art. The plumbing is
+      done and every check around it stays as it is; what remains is the
+      modelling itself, which is the part that genuinely cannot be
+      scaffolded. Two factions come free - they are a colour, not a render.
+- [ ] Terrain and building art. Deliberately *not* through Blender: tiles
+      have to sit seamlessly beside each other, which is easier to author
+      directly than to render.
 - [ ] 3–5 multiplayer maps, including a naval one (`crossing` has no water)
 - [ ] Campaign missions 1–3
 

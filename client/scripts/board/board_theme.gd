@@ -10,7 +10,12 @@ extends RefCounted
 ## This is presentation, so it deliberately does NOT live in shared/data:
 ## the server has no business knowing what colour a forest is.
 
-const TILE_SIZE := 32
+## 48, not 32: the unit sheet is rendered 3D, and a vehicle downsampled
+## to 32px loses the silhouette that tells it apart from another vehicle.
+## Everything on the board derives from this, so changing it re-lays the
+## whole board - but it must stay in step with the `tile` in
+## client/assets/units/units.json, which sprite_check asserts.
+const TILE_SIZE := 48
 
 const NEUTRAL := Color("#8d8d94")
 const SLOT_COLORS := {
