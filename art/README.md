@@ -48,6 +48,18 @@ is to save `.blend` files beside `models.py` and have the render script open
 those instead; the two passes, the manifest and every check downstream stay
 as they are.
 
+## The SVG prototype
+
+`art/svg/` draws three of the same units as SVG and rasterises them to the
+identical sheet contract - see `docs/ART_SPEC.md` for the measurements and
+what they mean. It is a prototype: nothing in `client/` points at it, and
+the shipped sheet still comes from Blender.
+
+If it is adopted, the change is contained to this directory and
+`tools/render-sprites.sh`. Everything downstream - the mask, the manifest,
+the shader, `sprite_check`, `sprite_preview` - stays exactly as it is,
+which was the point of proving it.
+
 ## The one rule that matters here
 
 Everything in this directory must be original. Blender is a tool, and its

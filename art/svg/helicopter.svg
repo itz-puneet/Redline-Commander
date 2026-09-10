@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <style>
+    .team-hi{fill:#cfcfd1}.team{fill:#bdbdbe}.team-lo{fill:#93939a}
+    .dark{fill:#43454d}.dark-hi{fill:#55575f}.light{fill:#d2d4d9}.glass{fill:#5b8ab4}
+    .edge{stroke:#2b2d33;stroke-width:0.7;stroke-linejoin:round}
+    .skid{stroke:#43454d;stroke-width:1.6;stroke-linecap:round}
+    .blade{stroke:#43454d;stroke-width:2.2;stroke-linecap:round}
+  </style>
+  <line class="skid" x1="20.5" y1="31.3" x2="28.5" y2="42.8"/>
+  <line class="skid" x1="33.6" y1="25.1" x2="41.6" y2="36.6"/>
+  <g class="edge">
+    <polygon class="team-hi" points="33.4,34.1 35.8,32.9 46.6,48.5 44.2,49.6"/>
+    <polygon class="team-lo" points="35.8,32.9 46.6,48.5 46.6,50.0 35.8,34.5"/>
+    <polygon class="light" points="42.7,42.1 43.9,41.5 47.2,46.2 46.0,46.8"/>
+    <polygon class="light" points="43.9,41.5 47.2,46.2 47.2,51.0 43.9,46.2"/>
+    <ellipse class="team" cx="31.1" cy="29.8" rx="15.0" ry="8.4"
+             transform="rotate(55 31.1 29.8)"/>
+    <ellipse class="team-hi" cx="30.4" cy="28.4" rx="12.0" ry="6.2"
+             transform="rotate(55 30.4 28.4)"/>
+    <circle class="glass" cx="26.4" cy="23.5" r="5.4"/>
+  </g>
+  <line class="blade" x1="6.9" y1="27.8" x2="55.2" y2="19.1"/>
+  <line class="blade" x1="35.6" y1="45.6" x2="25.1" y2="5.6"/>
+  <circle class="dark" cx="31.1" cy="24.6" r="1.8"/>
+</svg>

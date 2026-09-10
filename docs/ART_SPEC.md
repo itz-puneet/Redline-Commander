@@ -47,6 +47,44 @@ deliberate replacement of the pipeline, not as touch-ups on top of renders.
 A hand-corrected render is the worst of both: no longer reproducible, so
 `--check` has to go, and still not drawn.
 
+### There is a working SVG prototype, and it changes this recommendation
+
+`art/svg/` holds the same three units - infantry, light tank, helicopter -
+drawn as SVG and rasterised by `art/svg/render_prototype.py`, which emits
+the identical sheet, mask and manifest. Nothing in `client/` points at it.
+It exists to show that everything downstream of the sheet is
+producer-agnostic: the mask, the manifest, the tint shader, `sprite_check`
+and `sprite_preview` do not know what drew the pixels.
+
+Measured, not assumed:
+
+| | Blender | SVG |
+|---|---|---|
+| Render, whole sheet | ~7 s | **~91 ms** |
+| Byte-reproducible | no - one pixel in five runs | **yes, 6/6 identical** |
+| Sheet bytes per unit | 3.3 KB | **1.7 KB** |
+| Source bytes per unit | ~0.9 KB | ~1.3 KB |
+| Dependency | Blender (~600 MB) | `rsvg-convert` (~2 MB) |
+
+Two of those matter more than they look. Byte reproducibility means
+`--check` becomes a plain comparison and `tools/compare_sheets.py` - which
+exists only to tolerate Cycles' floating-point noise - can be deleted. And
+the mask stops being a second render with every material swapped: it is the
+same file with one stylesheet appended, so the two passes cannot drift.
+
+What the prototype actually showed, though, is about drawing rather than
+tooling. The SVG units read far better at 48px, and the reason is the
+outline. Against grass or forest the Blender renders lose their edges and
+soften into the terrain; a 0.7px dark stroke separates them completely. That
+is a property of the drawing, not of vectors - the Blender path could have
+outlines too - but in SVG it costs one CSS rule.
+
+The cost is real and unchanged: the three-quarter angle and the shading are
+hand-authored per unit rather than falling out of geometry. The prototype
+sidestepped that by projecting its coordinates through the same camera as
+the Blender renders, which is an honest way to compare media but not how an
+artist would work.
+
 ### If you keep Blender, do this first
 
 The current renders are plainly lit diffuse surfaces, which is most of why
