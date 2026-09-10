@@ -73,13 +73,62 @@ Fully specified in `docs/ART_SPEC.md`; the two that get caught most:
 `sprite_check` enforces both, so a mistake fails a test rather than reaching
 a phone.
 
+## Terrain and buildings
+
+A second, sibling script - `build_terrain_sheet.py` - builds the tile atlas
+`client/scripts/board/terrain_tileset.gd` loads. It works the same way in
+spirit but not in detail, because terrain isn't drawn like a unit:
+
+- **No mask, no tint.** Buildings need a real colour per owner, not one
+  tinted at runtime, so `art/png/terrain/city_0.png` .. `city_4.png` (owner
+  slots 0-4, neutral first) are five actual paintings, not one plus a mask.
+- **No overhang margin.** A unit's cell is bigger than its tile on purpose;
+  a terrain tile is not - it sits edge to edge against its neighbours, so
+  the build refuses anything that is not fully opaque corner to corner. A
+  transparent pixel there is a hole in the map, not a stray fringe.
+- **Exactly 48x48**, matching `BoardTheme.TILE_SIZE` - checked by
+  `TerrainTileSet` itself at load time, which falls back to its old flat-
+  colour painter rather than stretch a mismatched sheet. `board_check`
+  verifies the real sheet is what actually gets used, not just that the
+  fallback also works.
+
+```bash
+art/png/build_terrain_sheet.py /tmp/terrain
+```
+
+**The reference art was not drawn to tile.** Each terrain type in the
+source sheet is one illustrated vignette - a single river crossing at one
+angle, one cluster of trees, one mountain silhouette - not a texture meant
+to repeat. Placed on a real map, where the same terrain type sits beside
+itself many times, that shows: a river running through three tiles is the
+same diagonal segment repeated three times, not a continuous river, and the
+seam between tiles is visible on close inspection. It is still a large
+improvement over a flat colour rectangle, and is what ships today, but true
+seamless tiling - edges authored to match their neighbours - is separate,
+harder art work this set does not attempt.
+
+## Overlays, effects and emblems
+
+`art/png/overlays/`, `art/png/vfx/` and `art/png/emblems/` hold the
+selection bracket, move/attack range icons, the capture-progress bar,
+explosion and muzzle-flash frames, and the four faction emblem shapes, cut
+from the same reference sheet as the units and terrain. These are cropped
+and finished to size but **not wired into anything yet** - the board still
+draws range overlays as flat translucent colour
+(`client/scripts/board/tile_overlay.gd`), the capture bar as a drawn rect
+(`Unit._draw()`), and combat as a procedural flash and fade
+(`client/scripts/board/event_animator.gd`), because each of those is a
+different subsystem and deserves its own pass rather than four rushed ones
+in the same sitting as the terrain work.
+
 ## Status
 
-This ingest is built and verified: a full seventeen-unit set at 256x256 with
-derived masks was run through it and passed `sprite_check` and
-`sprite_preview` - including the check that the tint lands on exactly the
-pixels the mask marks. What it has not yet had is real artwork.
+Units, terrain and buildings are real artwork today, ingested through this
+directory and verified by `sprite_check`, `sprite_preview` and `board_check`
+(including a check that the committed terrain sheet is what actually loads,
+not a silent fallback). `tools/render-sprites.sh` still exists but is no
+longer what produces `client/assets/units/` - see `CLAUDE.md` rule 8.
 
-`tools/render-sprites.sh` still calls Blender. It gets pointed here once
-there is a full set of PNGs, since the committed sheet has to come from one
-producer.
+Not yet real: the overlays/VFX/emblems above (cropped, not wired), and
+anything not in the original reference sheet - a second map's terrain,
+additional buildings, and further units beyond the original seventeen.

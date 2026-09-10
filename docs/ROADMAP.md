@@ -69,11 +69,24 @@ Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
       their neutral tone was dark enough that the multiplicative tint
       shader couldn't move it, so team colour barely showed - see rule 8
       in `CLAUDE.md` for why, and keep new art out of that trap.
-- [ ] Terrain and building art. Deliberately *not* through Blender: tiles
-      have to sit seamlessly beside each other, which is easier to author
-      directly than to render. One 1584x48 sheet as things stand; give it a
-      generated manifest first, so the tile order is not an implicit
-      contract with `terrain.json`'s key order.
+- [x] Terrain and building art, ingested and wired in: `art/png/terrain/`
+      (33 files - 8 terrain types plus 5 buildings x 5 owners) built by
+      `art/png/build_terrain_sheet.py` into a 1584x48 sheet + manifest,
+      loaded by `TerrainTileSet` in place of its old flat-colour painter
+      (which stays as the fallback for a checkout with no sheet).
+      `board_check` verifies the real sheet is actually what loads, not a
+      silent fallback. See `art/png/README.md`.
+- [ ] Seamless terrain tiling. The art landed above is not that: each
+      terrain type is one illustrated vignette (a single river crossing, one
+      tree cluster), not a texture authored to repeat, so the same type
+      placed beside itself on a real map shows a visible seam. Real tiling
+      art - edges that match their neighbours - is separate work.
+- [ ] Wire the cropped-and-staged overlays, VFX and emblems
+      (`art/png/overlays/`, `art/png/vfx/`, `art/png/emblems/`) into the
+      renderer: selection/range highlights still draw flat translucent
+      colour (`tile_overlay.gd`), the capture bar is still a drawn rect
+      (`Unit._draw()`), combat is still a procedural flash and fade
+      (`event_animator.gd`), and faction emblems are not shown anywhere.
 - [x] A naval map (`straits`): two coasts, a deep channel with reefs and
       shallows, and a causeway at each edge so foot units can still cross.
       Every map in the index is checked for playability by

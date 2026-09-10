@@ -1,14 +1,22 @@
 class_name TerrainTileSet
 extends RefCounted
-## Builds the terrain TileSet at runtime from flat colours.
+## Builds the terrain TileSet, from real art when it exists and from flat
+## colours when it does not.
 ##
-## Generated rather than authored so the repo carries no placeholder art and
-## so a terrain type added to shared/data/terrain.json shows up on the board
-## without touching a .tres. Swapping in real art later means pointing the
-## atlas source at a real texture and keeping the same coordinate mapping.
+## The real sheet is generated from art/png/terrain/*.png by
+## art/png/build_terrain_sheet.py into
+## client/assets/terrain/{terrain.png,terrain.json}, which is committed -
+## see art/png/README.md. A checkout with that sheet missing, or one whose
+## tile size does not match the board's, falls back to the procedural
+## flat-colour painter below, so the game always renders something.
+## using_real_art() is the test seam that tells the two apart, the way
+## UnitSprites.ready() does for units.
 ##
 ## Capturable terrain gets one tile variant per owner (neutral, slot 1,
 ## slot 2, ...) so ownership is part of the tile rather than an overlay.
+
+const SHEET_PATH := "res://assets/terrain/terrain.png"
+const MANIFEST_PATH := "res://assets/terrain/terrain.json"
 
 
 ## Neutral, then every seat the board can colour. Derived from
@@ -24,9 +32,76 @@ static func owner_slots() -> Array:
 	return slots
 
 
+## True when a real, board-sized sheet is present and will be used - false
+## means build() is about to fall back to flat colour. Tests use this rather
+## than re-deriving the same loading logic.
+static func using_real_art(tile_size: int = BoardTheme.TILE_SIZE) -> bool:
+	return _load_manifest(tile_size) != null
+
+
 ## Returns { tile_set, source_id, coords } where `coords` maps a tile key
 ## (see tile_key()) to atlas coordinates.
 static func build(tile_size: int = BoardTheme.TILE_SIZE) -> Dictionary:
+	var manifest: Variant = _load_manifest(tile_size)
+	if manifest != null:
+		var built := _build_from_sheet(manifest, tile_size)
+		if not built.is_empty():
+			return built
+	return _build_procedural(tile_size)
+
+
+## The parsed manifest, or null if there is nothing usable to build from -
+## missing file, malformed JSON, or a tile size that does not match the
+## board's. A size mismatch falls back rather than stretching or
+## mis-tiling a texture region sized for a different TILE_SIZE.
+static func _load_manifest(tile_size: int) -> Variant:
+	if not FileAccess.file_exists(MANIFEST_PATH) or not ResourceLoader.exists(SHEET_PATH):
+		return null
+	var text := FileAccess.get_file_as_string(MANIFEST_PATH)
+	var parsed: Variant = JSON.parse_string(text)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		push_error("TerrainTileSet: %s is not a JSON object" % MANIFEST_PATH)
+		return null
+	var manifest: Dictionary = parsed
+	if not manifest.has("coords"):
+		push_error("TerrainTileSet: %s is missing coords" % MANIFEST_PATH)
+		return null
+	if int(manifest.get("tile", -1)) != tile_size:
+		push_error("TerrainTileSet: %s tile size %s does not match TILE_SIZE %d - falling back to flat colour"
+			% [MANIFEST_PATH, str(manifest.get("tile")), tile_size])
+		return null
+	return manifest
+
+
+static func _build_from_sheet(manifest: Dictionary, tile_size: int) -> Dictionary:
+	var texture: Texture2D = load(SHEET_PATH)
+	if texture == null:
+		push_error("TerrainTileSet: could not load %s - falling back to flat colour" % SHEET_PATH)
+		return {}
+
+	var source := TileSetAtlasSource.new()
+	source.texture = texture
+	source.texture_region_size = Vector2i(tile_size, tile_size)
+
+	var coords: Dictionary = {}
+	var raw_coords: Dictionary = manifest["coords"]
+	for key in raw_coords:
+		var cell := Vector2i(int(raw_coords[key]), 0)
+		source.create_tile(cell)
+		coords[key] = cell
+
+	var tile_set := TileSet.new()
+	tile_set.tile_size = Vector2i(tile_size, tile_size)
+	var source_id := tile_set.add_source(source)
+
+	return {"tile_set": tile_set, "source_id": source_id, "coords": coords}
+
+
+## The fallback used when no real sheet is present: flat colour, generated
+## rather than authored so the repo carries no placeholder art and a
+## terrain type added to shared/data/terrain.json shows up on the board
+## without touching a .tres.
+static func _build_procedural(tile_size: int) -> Dictionary:
 	var keys: Array[String] = []
 	for terrain_id in GameData.terrain.keys():
 		var id := String(terrain_id)

@@ -110,6 +110,17 @@ layout of the code, so keep them that way.
    and not currently used to produce the shipped sheet. Do not extend them
    without being asked - PNG is the live path.
 
+   Terrain works the same way through a sibling script,
+   `art/png/build_terrain_sheet.py`, into
+   `client/assets/terrain/{terrain.png,terrain.json}` -
+   `client/scripts/board/terrain_tileset.gd` loads it and falls back to its
+   old flat-colour painter if the sheet is missing or sized for a different
+   `TILE_SIZE`. Terrain tiles are unlike units in two ways: they get no mask
+   (each owner variant of a capturable tile is painted outright, not
+   tinted) and no overhang margin (they sit edge to edge, so the build
+   refuses anything not fully opaque corner to corner - a transparent pixel
+   there is a hole in the map). See `art/png/README.md`.
+
    One sheet serves every faction: units are painted in a neutral tone, a
    companion mask says which pixels take the faction colour, and the client
    tints through that mask at runtime (`client/shaders/team_tint.gdshader`).
@@ -143,10 +154,14 @@ out - board, fog, touch input, animated moves and combat, production, and a HUD
 with a damage forecast, all validated by the server and verified against a
 real one by `tools/live-check.sh`.
 
-Units are drawn from a rendered sprite sheet, tinted per faction. The models
-behind it are deliberate blockouts: the pipeline that produces them is
-finished and checked, the modelling is not. Still missing before it is a
-game: finished unit art, terrain art, more maps, and a campaign.
+Units, terrain and buildings are real artwork - see rule 8. Selection/range
+overlays, the capture bar, combat VFX and faction emblems are cropped and
+staged (`art/png/overlays/`, `art/png/vfx/`, `art/png/emblems/`) but not yet
+wired into the renderer. Terrain tiles are individual illustrations, not
+tileable textures, so the same terrain type repeated across a map shows a
+visible seam - real tiling art is separate work `art/png/README.md` flags
+rather than papers over. Still missing before it is a game: seamless
+terrain art, more maps, and a campaign.
 
 Devices authenticate on connect (trust on first use, see `server/src/auth`),
 the server refuses unencrypted connections from anything but loopback, and
@@ -202,6 +217,12 @@ tools/dev-cert.sh           # a self-signed cert for local wss:// testing
 # the faction colour. The sheet is committed, so this is only for changing
 # it. See art/png/README.md.
 art/png/build_sheet.py <output dir> --diff-suffix red
+
+# Terrain art - one PNG per tile in art/png/terrain/ (owner variants for
+# capturable terrain: city_0.png .. city_4.png). No mask, no overhang - a
+# terrain tile is painted outright and must be fully opaque edge to edge.
+# See art/png/README.md.
+art/png/build_terrain_sheet.py <output dir>
 
 # Unit art - the earlier procedural path (Blender). Not currently used to
 # produce the shipped sheet; kept for reference. See art/README.md.

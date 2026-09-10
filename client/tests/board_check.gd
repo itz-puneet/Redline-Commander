@@ -28,6 +28,7 @@ func _ready() -> void:
 	_check_hud_inset(state)
 	_check_coordinates()
 	_check_every_seat_has_tiles(state)
+	_check_real_terrain_art()
 
 	if _failures == 0:
 		print("\nboard_check: all checks passed")
@@ -247,3 +248,17 @@ func _check_every_seat_has_tiles(state: MatchState) -> void:
 
 	# Put the board back the way the other checks left it.
 	_board.render(state)
+
+
+## The committed terrain sheet must actually be the thing drawn, not a
+## silent fallback to flat colour. Verified two ways: that the real sheet
+## is used at the board's own tile size, and that asking for a tile size
+## the sheet does not match correctly reports "not using it" - the same
+## mismatch a stale or half-regenerated sheet would trigger, so this proves
+## the fallback path is reachable rather than assuming it from reading the
+## code.
+func _check_real_terrain_art() -> void:
+	_check("the committed terrain sheet is used, not the flat-colour fallback",
+		TerrainTileSet.using_real_art(BoardTheme.TILE_SIZE))
+	_check("a tile-size mismatch is detected as not using the real sheet",
+		not TerrainTileSet.using_real_art(BoardTheme.TILE_SIZE + 1))
