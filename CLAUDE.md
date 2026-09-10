@@ -244,8 +244,24 @@ tools/render-sprites.sh --check     # fail if the committed sheet is stale
 tools/render-sprites.sh --preview   # a magnified look, into .preview/
 ```
 
-Two Godot gotchas worth knowing:
+Three Godot gotchas worth knowing:
 
+- **Replacing a committed PNG with one of a different size does not
+  reliably invalidate Godot's import cache.** `res://assets/terrain/terrain.png`
+  went from 33 tiles to 49 without a single test catching it: `--headless
+  --import` reported no error, but every check that touched rendering
+  (`board_check`, a `terrain_preview` render) kept silently reading the
+  *old, smaller* cached texture through the *new* JSON manifest - the
+  manifest is parsed straight off disk with `FileAccess`, bypassing
+  Godot's import system entirely, so it happily pointed the new tile
+  indices at atlas cells the stale cached texture didn't have, and the
+  GPU clamped them to whatever pixel sat at the old texture's edge. The
+  render looked plausible - flat grey roads, solid-colour water - which
+  is what made it worth writing down: nothing crashed or printed a
+  mismatch. Fix: delete both the stale entries in `.godot/imported/` (the
+  `<name>-<hash>.{ctex,md5}` pair) and the asset's own `.import` file,
+  then run `godot --headless --import` again - that regenerates a fresh
+  hash and a real reimport, not just a no-op scan of what already exists.
 - `godot --check-only --script <file>` reports false "Identifier not found"
   errors for the autoloads (`GameData`, `Net`, `PlayerIdentity`) and for
   `class_name` types, because that mode does not register them. Use the

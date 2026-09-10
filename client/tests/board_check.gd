@@ -363,51 +363,51 @@ func _check_water_map_renders(state: MatchState) -> void:
 		layer.get_used_cells().size() == water.map_width * water.map_height,
 		"%d of %d" % [layer.get_used_cells().size(), water.map_width * water.map_height])
 
-	# A shore tile whose variant the sheet has no art for: it must resolve to
-	# the plain tile, not to the key nothing can draw.
-	var shore := Vector2i(-1, -1)
-	for y in water.map_height:
-		for x in water.map_width:
-			if water.terrain_at(x, y) == "shallow_water":
-				shore = Vector2i(x, y)
-				break
-		if shore.x >= 0:
-			break
-	_check("the water map has a shore to resolve", shore.x >= 0)
-	if shore.x >= 0:
-		var resolved: String = _board._terrain_tile_key(shore.x, shore.y, "shallow_water")
-		_check("a variant with no art falls back to the plain tile",
-			resolved == "shallow_water:0", "resolved to %s" % resolved)
-
-	# What the map asks the sheet for, and what the sheet has. Printed rather
-	# than asserted: none of these exist yet, and the list IS the art order.
-	var wanted: Dictionary = {}
+	# A variant the sheet genuinely has no art for still has to fall back to
+	# the plain tile rather than resolve to a key nothing can draw. Roads
+	# supply the case: art/png/terrain/ has no road_N.png (a dead-end piece),
+	# and straits has one, so this exercises the fallback against real
+	# rather than fabricated data - if a future art drop fills in the last
+	# road ends, this check starts failing its premise loudly (no candidate
+	# tile found) rather than silently passing on the wrong thing.
 	var built: Dictionary = TerrainTileSet.build()
 	var coords: Dictionary = built.get("coords", {})
+	var dead_end := Vector2i(-1, -1)
 	for y in water.map_height:
 		for x in water.map_width:
-			var terrain_id := water.terrain_at(x, y)
-			if not TerrainTileSet.autotiles(terrain_id):
+			if water.terrain_at(x, y) != "road":
 				continue
-			var mask := TerrainTileSet.neighbour_mask(terrain_id, [
+			var mask := TerrainTileSet.neighbour_mask("road", [
 				water.terrain_at(x, y - 1), water.terrain_at(x + 1, y),
 				water.terrain_at(x, y + 1), water.terrain_at(x - 1, y)])
-			var key: String = TerrainTileSet.variant_keys(terrain_id, 0, mask)[0]
-			if not coords.has(key):
-				wanted[key] = int(wanted.get(key, 0)) + 1
-	var names: Array = wanted.keys()
-	names.sort()
-	print("     straits wants %d neighbour variants not in the sheet: %s"
-		% [names.size(), ", ".join(PackedStringArray(names))])
+			if TerrainTileSet.mask_suffix(mask).length() == 1:
+				dead_end = Vector2i(x, y)
+				break
+		if dead_end.x >= 0:
+			break
+	_check("straits has a road end to test the fallback with", dead_end.x >= 0)
+	if dead_end.x >= 0:
+		var resolved: String = _board._terrain_tile_key(dead_end.x, dead_end.y, "road")
+		_check("a variant with no art falls back to the plain tile",
+			resolved == "road:0", "resolved to %s" % resolved)
 
-	# A shoreline that faced nowhere would be the bug this whole mechanism
-	# exists to prevent, so assert the map produces real orientations rather
-	# than a single default.
+	# The shoreline, the opposite case: every orientation straits uses IS in
+	# the sheet now (art/png/terrain/shallow_water_*.png), so this checks the
+	# render actually reaches that art rather than quietly falling back to
+	# the plain tile while still passing "every tile is drawn" above.
 	var orientations: Dictionary = {}
-	for key in wanted.keys():
-		if String(key).begins_with("shallow_water:"):
-			orientations[String(key).split("@")[1]] = true
-	_check("the shoreline resolves to more than one orientation",
+	var fallen_back: Array = []
+	for y in water.map_height:
+		for x in water.map_width:
+			if water.terrain_at(x, y) != "shallow_water":
+				continue
+			var key: String = _board._terrain_tile_key(x, y, "shallow_water")
+			if key == "shallow_water:0" or not coords.has(key):
+				fallen_back.append("(%d,%d)->%s" % [x, y, key])
+			orientations[key] = true
+	_check("every shoreline tile resolves to real art, not the fallback",
+		fallen_back.is_empty(), "%d did not: %s" % [fallen_back.size(), str(fallen_back)])
+	_check("the shoreline uses more than one orientation of real art",
 		orientations.size() >= 4, "%d distinct: %s" % [orientations.size(), str(orientations.keys())])
 
 	_board.render(state)

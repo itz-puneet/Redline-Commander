@@ -126,13 +126,6 @@ building, or the edge of the map. For shallow water a side counts when it
 is **land**, which is what decides which edge carries sand; reef and deep
 water are sea, and so is anything beyond the map edge.
 
-**None of these files exist yet, and that is the whole of what is missing.**
-Until they do, every lookup falls back to `road.png` and
-`shallow_water.png`, which is what ships today: one diagonal highway strip
-repeated at every junction, and an open-water tile with no beach on any
-edge. `board_check` prints the list of variants the shipped maps ask for
-and cannot get.
-
 What the two shipped maps need, exactly:
 
 | | files | which |
@@ -142,19 +135,47 @@ What the two shipped maps need, exactly:
 
 Both sets are rotations of far fewer drawings - the 14 roads are an end, a
 straight, a corner, a tee and a crossroads (5 sprites) turned four ways;
-the 6 shores are a straight coast and an inside corner (2 sprites). Nothing
-generates those rotations yet, so today it is 20 files. `road_0.png`
+the 6 shores are a straight coast and an inside corner (2 sprites). `road_0.png`
 (a one-tile road) and `road_EW.png` (an east-west straight) are the two
 neighbourhoods no shipped map produces, and are not needed.
 
-Two existing tiles are also wrong for where they are used, and no amount of
+**16 of the 20 are in as of the second art drop; 4 are still missing.**
+All 6 shoreline variants and 10 of the 14 road variants are in
+`art/png/terrain/`, ingested from a generated reference sheet and cropped
+with `art/png/extract_variants.py`. Still missing, because no source art
+exists for them: **`road_N.png`, `road_E.png`, `road_S.png`, `road_W.png`**
+- a road that terminates and connects on only one side (a dead end). The
+  sheet's four single-letter road tiles all turned out to be straight
+  through-roads in disguise (see below), which is the wrong shape for a
+  dead end and was not used. Until real dead-end art exists, straits and
+  crossing's five single-connection road tiles fall back to `road.png`
+  (the diagonal) - a visible seam where the network dead-ends, not a gap.
+
+**The source sheet's captions did not reliably match its art**, and this
+is worth knowing before trusting a generated reference sheet again. Every
+tile was verified by measuring which sides its content actually touches
+(asphalt for roads, grass-vs-water for shorelines), not by trusting the
+filename in the caption:
+- All 14 road captions were correct except the four single-letter ones
+  (`road_N`, `road_E`, `road_S`, `road_W`), which all measured as full
+  straight-through roads (`NS` or `EW`) - duplicates of `road_NS`, not
+  dead ends. None of the four were usable for what their name promised.
+- Of the 6 shoreline captions, only 3 were correct: `shallow_water_N` and
+  two of the four corners. `shallow_water_S` was measured as another `N`
+  (land touching the top edge, not the bottom - an exact duplicate);
+  `shallow_water_NE` measured as `NW`; `shallow_water_NW` measured as `NE`;
+  `shallow_water_ES` measured as a plain `W` straight, not a corner at all.
+- The 3 missing shoreline orientations (`S`, `ES`, `SW`) were produced by
+  rotating the 3 genuinely-drawn ones 180/90 degrees - shorelines have no
+  baked-in asymmetry beyond which way they face, so this is a mechanical
+  transform of real art, not new content. Verified before trusting it:
+  rotating the genuine `NW` tile 90 degrees clockwise reproduces the
+  genuine `NE` tile (both independently present in the sheet), almost
+  pixel for pixel.
+
+Two more tiles are wrong for where they are used, and no amount of
 neighbour logic fixes either:
 
-- **`road.png` is a diagonal.** A two-lane highway running corner to
-  corner cannot be part of an orthogonal network at any orientation, so it
-  is not usable as the fallback *or* as the base for the 14 above. The
-  variants have to be drawn as orthogonal road, meeting their neighbours at
-  the middle of each tile edge.
 - **`reef.png` is painted on shallow water.** Reefs sit in deep water by
   the map rules (`server/test/data.test.ts` enforces it), so the tile reads
   as a pale patch in the middle of the dark channel. It needs a deep-water

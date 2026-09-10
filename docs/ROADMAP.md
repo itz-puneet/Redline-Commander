@@ -82,15 +82,22 @@ Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
       variant, so art can land a file at a time. `build_terrain_sheet.py`
       picks up `road_NS.png`, `shallow_water_NE.png` and the like with no
       code change.
-- [ ] Seamless terrain tiling. The art is still one illustrated vignette per
-      type (a single river crossing, one tree cluster), not a texture
-      authored to repeat, and **none of the 20 neighbour variants the
-      mechanism above wants have been drawn** - 14 roads and 6 shorelines,
-      listed exactly in `art/png/README.md`. Until they are, roads are a
-      diagonal strip at every junction and shorelines have no beach.
-      Three existing tiles are wrong for where they are used, too: the road
-      is a diagonal, the reef is painted on shallow water when it only ever
-      sits in deep, and every building sits on opaque black.
+- [x] Road and shoreline neighbour variants, mostly. 16 of the 20 the
+      mechanism above wants are in: all 6 shoreline orientations, 10 of
+      the 14 road ones, cropped from a generated reference sheet by
+      `art/png/extract_variants.py` (which measures each tile's actual
+      content rather than trusting its caption - several were mislabelled,
+      see `art/png/README.md`). Still missing: `road_N/E/S/W.png`, a road
+      that dead-ends on one side - the sheet's four single-letter tiles
+      all turned out to be mislabelled straight-throughs, not dead ends,
+      so straits and crossing's five dead-end tiles still fall back to
+      the diagonal `road.png`.
+- [ ] Seamless terrain tiling. The art beyond the two sets above is still
+      one illustrated vignette per type (a single river crossing, one tree
+      cluster), not a texture authored to repeat. Three existing tiles are
+      also wrong for where they are used: the fallback road is a diagonal,
+      the reef is painted on shallow water when it only ever sits in deep,
+      and every building sits on opaque black.
 - [ ] Wire the cropped-and-staged overlays, VFX and emblems
       (`art/png/overlays/`, `art/png/vfx/`, `art/png/emblems/`) into the
       renderer: selection/range highlights still draw flat translucent

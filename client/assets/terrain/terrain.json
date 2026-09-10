@@ -33,10 +33,26 @@
     "reef:0": 7,
     "river:0": 4,
     "road:0": 1,
-    "shallow_water:0": 5
+    "road:0@ES": 35,
+    "road:0@ESW": 41,
+    "road:0@NE": 33,
+    "road:0@NES": 36,
+    "road:0@NESW": 42,
+    "road:0@NEW": 38,
+    "road:0@NS": 34,
+    "road:0@NSW": 40,
+    "road:0@NW": 37,
+    "road:0@SW": 39,
+    "shallow_water:0": 5,
+    "shallow_water:0@ES": 46,
+    "shallow_water:0@N": 43,
+    "shallow_water:0@NE": 44,
+    "shallow_water:0@NW": 47,
+    "shallow_water:0@S": 45,
+    "shallow_water:0@SW": 48
   },
   "height": 48,
   "sheet": "terrain.png",
   "tile": 48,
-  "width": 1584
+  "width": 2352
 }
