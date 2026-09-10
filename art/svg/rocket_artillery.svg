@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Seeded from art/blender/models.py by seed_from_blockouts.py, then
+       meant to be edited by hand. See art/svg/_palette.md for the classes;
+       a shape is faction-coloured if and only if its class says so. -->
+  <style>
+    .team-hi{fill:#cfcfd1}.team{fill:#bdbdbe}.team-lo{fill:#93939a}
+    .dark{fill:#43454d}.dark-hi{fill:#55575f}.light{fill:#d2d4d9}.glass{fill:#5b8ab4}
+    .edge{stroke:#2b2d33;stroke-width:0.7;stroke-linejoin:round}
+    .rod-dark{stroke:#43454d;stroke-linecap:round}
+    .rod-team{stroke:#bdbdbe;stroke-linecap:round}
+    .rod-light{stroke:#d2d4d9;stroke-linecap:round}
+    .rod-glass{stroke:#5b8ab4;stroke-linecap:round}
+  </style>
+  <ellipse class="dark-hi edge" cx="28.7" cy="50.6" rx="4.1" ry="3.4" transform="rotate(90 28.7 50.6)"/>
+  <polygon class="team-lo edge" points="33.8,26.5 47.1,45.7 47.1,41.6 33.8,22.4"/>
+  <polygon class="team-hi edge" points="17.8,30.1 33.8,22.4 47.1,41.6 31.2,49.3"/>
+  <ellipse class="dark-hi edge" cx="24.1" cy="44.0" rx="4.1" ry="3.4" transform="rotate(90 24.1 44.0)"/>
+  <ellipse class="dark-hi edge" cx="45.5" cy="42.6" rx="4.1" ry="3.4" transform="rotate(90 45.5 42.6)"/>
+  <ellipse class="dark-hi edge" cx="19.2" cy="37.0" rx="4.1" ry="3.4" transform="rotate(90 19.2 37.0)"/>
+  <ellipse class="dark-hi edge" cx="40.8" cy="36.0" rx="4.1" ry="3.4" transform="rotate(90 40.8 36.0)"/>
+  <polygon class="dark edge" points="37.5,26.3 43.2,38.8 46.6,38.1 40.8,25.5"/>
+  <polygon class="team-hi edge" points="17.8,34.2 33.8,26.5 33.8,22.4 17.8,30.1"/>
+  <polygon class="dark edge" points="27.2,32.0 40.8,25.5 46.6,38.1 33.0,44.6"/>
+  <polygon class="team-hi edge" points="25.7,38.0 40.0,31.1 43.6,30.3 29.3,37.2"/>
+  <ellipse class="dark-hi edge" cx="36.0" cy="29.0" rx="4.1" ry="3.4" transform="rotate(90 36.0 29.0)"/>
+  <polygon class="team-lo edge" points="40.0,31.1 41.2,33.7 44.8,32.8 43.6,30.3"/>
+  <polygon class="team edge" points="29.3,37.2 43.6,30.3 44.8,32.8 30.4,39.7"/>
+  <polygon class="light edge" points="31.3,23.2 35.5,29.2 35.5,25.6 31.3,19.6"/>
+  <polygon class="light edge" points="19.3,29.0 31.3,23.2 31.3,19.6 19.3,25.4"/>
+  <polygon class="dark-hi edge" points="23.9,32.8 37.5,26.3 40.8,25.5 27.2,32.0"/>
+  <polygon class="light edge" points="19.3,25.4 31.3,19.6 35.5,25.6 23.5,31.3"/>
+</svg>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Seeded from art/blender/models.py by seed_from_blockouts.py, then
+       meant to be edited by hand. See art/svg/_palette.md for the classes;
+       a shape is faction-coloured if and only if its class says so. -->
+  <style>
+    .team-hi{fill:#cfcfd1}.team{fill:#bdbdbe}.team-lo{fill:#93939a}
+    .dark{fill:#43454d}.dark-hi{fill:#55575f}.light{fill:#d2d4d9}.glass{fill:#5b8ab4}
+    .edge{stroke:#2b2d33;stroke-width:0.7;stroke-linejoin:round}
+    .rod-dark{stroke:#43454d;stroke-linecap:round}
+    .rod-team{stroke:#bdbdbe;stroke-linecap:round}
+    .rod-light{stroke:#d2d4d9;stroke-linecap:round}
+    .rod-glass{stroke:#5b8ab4;stroke-linecap:round}
+  </style>
+  <polygon class="dark edge" points="32.2,26.4 48.8,50.2 48.8,46.6 32.2,22.8"/>
+  <polygon class="dark-hi edge" points="17.0,30.0 32.2,22.8 48.8,46.6 33.6,53.9"/>
+  <polygon class="team-hi edge" points="19.4,29.7 32.2,23.6 44.6,41.4 31.8,47.6"/>
+  <polygon class="team-lo edge" points="32.2,24.9 44.6,42.7 44.6,41.4 32.2,23.6"/>
+  <polygon class="light edge" points="39.2,37.3 43.8,43.9 43.8,38.8 39.2,32.2"/>
+  <polygon class="light edge" points="30.4,41.5 39.2,37.3 39.2,32.2 30.4,36.4"/>
+  <polygon class="dark-hi edge" points="17.0,33.6 32.2,26.4 32.2,22.8 17.0,30.0"/>
+  <polygon class="light edge" points="30.4,36.4 39.2,32.2 43.8,38.8 35.0,43.0"/>
+  <polygon class="dark-hi edge" points="33.0,24.8 19.8,21.3 18.6,34.9"/>
+  <polygon class="team-hi edge" points="19.4,31.0 32.2,24.9 32.2,23.6 19.4,29.7"/>
+  <polygon class="team-lo edge" points="32.5,23.9 38.9,33.1 38.9,28.5 32.5,19.2"/>
+  <polygon class="team-hi edge" points="20.5,29.6 32.5,23.9 32.5,19.2 20.5,25.0"/>
+  <polygon class="team-hi edge" points="20.5,25.0 32.5,19.2 38.9,28.5 26.9,34.2"/>
+  <line class="rod-dark" x1="12.8" y1="18.5" x2="34.0" y2="29.6" stroke-width="3.3"/>
+  <line class="rod-dark" x1="13.8" y1="15.4" x2="35.0" y2="26.4" stroke-width="3.3"/>
+</svg>

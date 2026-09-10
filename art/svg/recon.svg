@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Seeded from art/blender/models.py by seed_from_blockouts.py, then
+       meant to be edited by hand. See art/svg/_palette.md for the classes;
+       a shape is faction-coloured if and only if its class says so. -->
+  <style>
+    .team-hi{fill:#cfcfd1}.team{fill:#bdbdbe}.team-lo{fill:#93939a}
+    .dark{fill:#43454d}.dark-hi{fill:#55575f}.light{fill:#d2d4d9}.glass{fill:#5b8ab4}
+    .edge{stroke:#2b2d33;stroke-width:0.7;stroke-linejoin:round}
+    .rod-dark{stroke:#43454d;stroke-linecap:round}
+    .rod-team{stroke:#bdbdbe;stroke-linecap:round}
+    .rod-light{stroke:#d2d4d9;stroke-linecap:round}
+    .rod-glass{stroke:#5b8ab4;stroke-linecap:round}
+  </style>
+  <ellipse class="dark-hi edge" cx="28.8" cy="49.2" rx="4.1" ry="3.4" transform="rotate(90 28.8 49.2)"/>
+  <polygon class="team-lo edge" points="32.0,25.6 46.3,46.1 46.3,42.5 32.0,22.0"/>
+  <polygon class="team-hi edge" points="17.7,28.9 32.0,22.0 46.3,42.5 32.0,49.4"/>
+  <ellipse class="dark edge" cx="32.3" cy="46.4" rx="0.6" ry="0.5"/>
+  <ellipse class="dark-hi edge" cx="44.0" cy="42.0" rx="4.1" ry="3.4" transform="rotate(90 44.0 42.0)"/>
+  <ellipse class="dark-hi edge" cx="20.0" cy="36.6" rx="4.1" ry="3.4" transform="rotate(90 20.0 36.6)"/>
+  <polygon class="team-hi edge" points="17.7,32.5 32.0,25.6 32.0,22.0 17.7,28.9"/>
+  <polygon class="glass edge" points="33.3,26.7 39.1,35.0 39.1,31.9 33.3,23.6"/>
+  <polygon class="glass edge" points="21.7,29.2 33.3,23.6 39.1,31.9 27.5,37.5"/>
+  <ellipse class="dark-hi edge" cx="35.2" cy="29.4" rx="4.1" ry="3.4" transform="rotate(90 35.2 29.4)"/>
+  <polygon class="glass edge" points="21.7,32.3 33.3,26.7 33.3,23.6 21.7,29.2"/>
+  <ellipse class="dark-hi edge" cx="32.3" cy="36.1" rx="0.6" ry="0.5"/>
+</svg>

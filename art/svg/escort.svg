@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Seeded from art/blender/models.py by seed_from_blockouts.py, then
+       meant to be edited by hand. See art/svg/_palette.md for the classes;
+       a shape is faction-coloured if and only if its class says so. -->
+  <style>
+    .team-hi{fill:#cfcfd1}.team{fill:#bdbdbe}.team-lo{fill:#93939a}
+    .dark{fill:#43454d}.dark-hi{fill:#55575f}.light{fill:#d2d4d9}.glass{fill:#5b8ab4}
+    .edge{stroke:#2b2d33;stroke-width:0.7;stroke-linejoin:round}
+    .rod-dark{stroke:#43454d;stroke-linecap:round}
+    .rod-team{stroke:#bdbdbe;stroke-linecap:round}
+    .rod-light{stroke:#d2d4d9;stroke-linecap:round}
+    .rod-glass{stroke:#5b8ab4;stroke-linecap:round}
+  </style>
+  <polygon class="dark edge" points="31.0,26.1 48.5,51.2 48.5,47.6 31.0,22.5"/>
+  <polygon class="dark-hi edge" points="17.4,29.0 31.0,22.5 48.5,47.6 34.9,54.1"/>
+  <polygon class="team-hi edge" points="19.1,28.5 31.1,22.8 44.9,42.6 32.9,48.4"/>
+  <polygon class="team-lo edge" points="31.1,24.1 44.9,43.9 44.9,42.6 31.1,22.8"/>
+  <polygon class="light edge" points="35.7,32.6 41.7,41.2 41.7,36.6 35.7,28.0"/>
+  <ellipse class="dark edge" cx="38.0" cy="42.8" rx="0.6" ry="0.5"/>
+  <polygon class="dark-hi edge" points="17.4,32.6 31.0,26.1 31.0,22.5 17.4,29.0"/>
+  <polygon class="light edge" points="26.9,36.8 35.7,32.6 35.7,28.0 26.9,32.2"/>
+  <polygon class="light edge" points="26.9,32.2 35.7,28.0 41.7,36.6 32.9,40.8"/>
+  <polygon class="dark edge" points="33.1,28.0 36.8,33.3 34.0,38.4 30.3,33.1"/>
+  <polygon class="dark-hi edge" points="31.7,24.7 19.3,20.6 18.9,33.7"/>
+  <ellipse class="dark edge" cx="26.5" cy="32.0" rx="1.2" ry="1.0"/>
+  <polygon class="team-hi edge" points="19.1,29.8 31.1,24.1 31.1,22.8 19.1,28.5"/>
+  <ellipse class="dark edge" cx="31.3" cy="29.7" rx="1.2" ry="1.0"/>
+  <polygon class="dark-hi edge" points="30.3,33.1 31.8,32.8 34.6,27.8 33.1,28.0"/>
+  <polygon class="dark-hi edge" points="33.1,28.0 34.6,27.8 38.3,33.1 36.8,33.3"/>
+  <ellipse class="dark-hi edge" cx="38.0" cy="35.0" rx="0.6" ry="0.5"/>
+  <ellipse class="dark-hi edge" cx="23.5" cy="19.7" rx="1.2" ry="1.0"/>
+  <ellipse class="dark-hi edge" cx="28.3" cy="17.4" rx="1.2" ry="1.0"/>
+</svg>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Seeded from art/blender/models.py by seed_from_blockouts.py, then
+       meant to be edited by hand. See art/svg/_palette.md for the classes;
+       a shape is faction-coloured if and only if its class says so. -->
+  <style>
+    .team-hi{fill:#cfcfd1}.team{fill:#bdbdbe}.team-lo{fill:#93939a}
+    .dark{fill:#43454d}.dark-hi{fill:#55575f}.light{fill:#d2d4d9}.glass{fill:#5b8ab4}
+    .edge{stroke:#2b2d33;stroke-width:0.7;stroke-linejoin:round}
+    .rod-dark{stroke:#43454d;stroke-linecap:round}
+    .rod-team{stroke:#bdbdbe;stroke-linecap:round}
+    .rod-light{stroke:#d2d4d9;stroke-linecap:round}
+    .rod-glass{stroke:#5b8ab4;stroke-linecap:round}
+  </style>
+  <polygon class="light edge" points="30.2,42.7 46.2,35.0 49.4,39.6 33.5,47.3"/>
+  <polygon class="team-hi edge" points="9.7,36.6 49.7,17.5 55.2,25.4 15.3,44.5"/>
+  <polygon class="light edge" points="30.2,43.4 46.2,35.8 46.2,35.0 30.2,42.7"/>
+  <polygon class="light edge" points="39.1,38.8 42.7,44.0 42.7,39.9 39.1,34.6"/>
+  <line class="rod-dark" x1="17.3" y1="33.6" x2="22.8" y2="41.5" stroke-width="5.1"/>
+  <line class="rod-team" x1="23.5" y1="18.0" x2="40.5" y2="42.5" stroke-width="10.1"/>
+  <polygon class="light edge" points="46.2,35.8 49.4,40.4 49.4,39.6 46.2,35.0"/>
+  <polygon class="light edge" points="37.9,39.3 39.1,38.8 39.1,34.6 37.9,35.2"/>
+  <polygon class="team-hi edge" points="9.7,37.5 49.7,18.4 49.7,17.5 9.7,36.6"/>
+  <polygon class="light edge" points="37.9,35.2 39.1,34.6 42.7,39.9 41.5,40.5"/>
+  <line class="rod-dark" x1="41.2" y1="22.1" x2="46.7" y2="30.1" stroke-width="5.1"/>
+  <polygon class="team-lo edge" points="49.7,18.4 55.2,26.3 55.2,25.4 49.7,17.5"/>
+  <ellipse class="glass edge" cx="22.8" cy="17.0" rx="7.4" ry="5.1" transform="rotate(55 22.8 17.0)"/>
+</svg>

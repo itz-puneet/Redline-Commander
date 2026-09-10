@@ -60,6 +60,17 @@ If it is adopted, the change is contained to this directory and
 the shader, `sprite_check`, `sprite_preview` - stays exactly as it is,
 which was the point of proving it.
 
+`seed_from_blockouts.py` has since projected all seventeen blockouts into
+editable SVGs, so the migration does not start from a blank page. It is a
+starting point and not a finish: it produces usable drawings for the ground
+vehicles and the ships, and **mangles the three aircraft and the scout
+plane**, whose shapes do not survive being flattened automatically. Those
+four need drawing by hand before the producer can be switched over, which
+is why `tools/render-sprites.sh` still calls Blender.
+
+Re-running the seeder overwrites hand edits. Once a unit has been drawn
+properly, it should not be re-seeded.
+
 ## The one rule that matters here
 
 Everything in this directory must be original. Blender is a tool, and its
