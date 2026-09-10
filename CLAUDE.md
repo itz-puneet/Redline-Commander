@@ -98,20 +98,36 @@ layout of the code, so keep them that way.
    rejections rather than dying. Never add an `async` event listener without
    a `.catch`.
 
-8. **Art is generated, and its source is text.** Unit sprites are rendered
-   from `art/blender/models.py` by `tools/render-sprites.sh` into
-   `client/assets/units/`, which is committed - you can build and play
-   without Blender installed. Never edit the sheet, the mask or the manifest
-   by hand; change the model and re-render, and `--check` will confirm the
-   two still agree.
+8. **Unit art comes from PNG source, and `client/assets/units/` is generated
+   from it.** The current sheet is built by `art/png/build_sheet.py` from
+   the per-unit PNGs in `art/png/units/`, and the sheet, mask and manifest
+   it writes are committed - you can build and play without regenerating
+   anything. Never edit the sheet, the mask or the manifest by hand; change
+   the source PNG and rebuild.
 
-   One sheet serves every faction: it is rendered in neutral grey with a
-   companion mask, and the client tints through the mask
-   (`client/shaders/team_tint.gdshader`). Adding a faction is a colour in
-   `BoardTheme.SLOT_COLORS`, not another ten renders - so do not add a
+   `art/blender/` (procedural, driven by `tools/render-sprites.sh`) and
+   `art/svg/` (hand-drawn vector) are earlier pipelines, kept for reference
+   and not currently used to produce the shipped sheet. Do not extend them
+   without being asked - PNG is the live path.
+
+   One sheet serves every faction: units are painted in a neutral tone, a
+   companion mask says which pixels take the faction colour, and the client
+   tints through that mask at runtime (`client/shaders/team_tint.gdshader`).
+   The mask can come from an explicit `_mask.png` per unit or, when a set
+   already exists in two colours, by diffing the two
+   (`build_sheet.py --diff-suffix`). Adding a faction is a colour in
+   `BoardTheme.SLOT_COLORS`, not another seventeen files - so never add a
    per-faction sheet.
 
-   Everything under `art/` must be original geometry. A mesh from an asset
+   The neutral tone matters mechanically, not just visually: the shader
+   tints by multiplying, so a near-black pixel in the masked region stays
+   near-black under every faction colour - the tint becomes invisible where
+   the art is too dark. Keep team-coloured areas in a light-to-mid tone;
+   `sprite_preview` catches the failure (`only N of M solidly masked pixels
+   tinted`) but the fix is in the art, not the pipeline.
+
+   Everything under `art/` must be original - drawn, modelled, or generated
+   by or for this project. A mesh, sprite, or image traced from an asset
    library or another game carries its licence into the sprite and into this
    repository; that is the hard rule above, not a preference.
 
@@ -181,8 +197,14 @@ tools/live-check.sh
 tools/live-check.sh --tls   # the same, over wss:// with a generated cert
 tools/dev-cert.sh           # a self-signed cert for local wss:// testing
 
-# Unit art. Needs Blender on the PATH; the sheet is committed, so this is
-# only for changing it. See art/README.md.
+# Unit art - the live path. One PNG per unit in art/png/units/, an
+# explicit _mask.png or a --diff-suffix colourway to say which pixels take
+# the faction colour. The sheet is committed, so this is only for changing
+# it. See art/png/README.md.
+art/png/build_sheet.py <output dir> --diff-suffix red
+
+# Unit art - the earlier procedural path (Blender). Not currently used to
+# produce the shipped sheet; kept for reference. See art/README.md.
 tools/render-sprites.sh
 tools/render-sprites.sh --check     # fail if the committed sheet is stale
 tools/render-sprites.sh --preview   # a magnified look, into .preview/

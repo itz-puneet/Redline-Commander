@@ -56,14 +56,19 @@ finished models, terrain art, more maps, and a campaign.
 
 Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
 
-- [x] A sprite pipeline: models in `art/blender/`, rendered by
-      `tools/render-sprites.sh` into a sheet plus a faction mask, tinted on
-      the client through one shader. Proven end to end and checked
-      (`sprite_check`, `sprite_preview`, `--check`). See `art/README.md`.
-- [ ] Replace the blockout models with finished unit art. The plumbing is
-      done and every check around it stays as it is; what remains is the
-      modelling itself, which is the part that genuinely cannot be
-      scaffolded. Two factions come free - they are a colour, not a render.
+- [x] A sprite pipeline: two of them now. `art/blender/` (procedural) was
+      first; `art/png/build_sheet.py` (real PNG art in, sheet plus a
+      faction mask out) is what ships today. Both feed the same tint
+      shader and the same checks (`sprite_check`, `sprite_preview`,
+      `--check`). See `art/png/README.md`.
+- [x] Finished unit art for all 17 units, two colourways (the rest of the
+      faction palette is free - it's a shader tint, not a render). Built
+      from a reference sheet the user supplied
+      (`art/png/reference_sheet.png`); see the commit history in `art/png/` for how
+      it was cropped, aligned and verified. Two units needed a real fix:
+      their neutral tone was dark enough that the multiplicative tint
+      shader couldn't move it, so team colour barely showed - see rule 8
+      in `CLAUDE.md` for why, and keep new art out of that trap.
 - [ ] Terrain and building art. Deliberately *not* through Blender: tiles
       have to sit seamlessly beside each other, which is easier to author
       directly than to render. One 1584x48 sheet as things stand; give it a
