@@ -53,6 +53,9 @@ finished models, terrain art, more maps, and a campaign.
 - [ ] Faction Field Directives (in `factions.json`; not wired into the engine)
 
 ## Phase 4 — Content (next up)
+
+Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
+
 - [x] A sprite pipeline: models in `art/blender/`, rendered by
       `tools/render-sprites.sh` into a sheet plus a faction mask, tinted on
       the client through one shader. Proven end to end and checked
@@ -63,7 +66,9 @@ finished models, terrain art, more maps, and a campaign.
       scaffolded. Two factions come free - they are a colour, not a render.
 - [ ] Terrain and building art. Deliberately *not* through Blender: tiles
       have to sit seamlessly beside each other, which is easier to author
-      directly than to render.
+      directly than to render. One 1584x48 sheet as things stand; give it a
+      generated manifest first, so the tile order is not an implicit
+      contract with `terrain.json`'s key order.
 - [ ] 3–5 multiplayer maps, including a naval one (`crossing` has no water)
 - [ ] Campaign missions 1–3
 

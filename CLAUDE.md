@@ -142,8 +142,9 @@ messages, connections and match creation are rate limited.
 1. `docs/ARCHITECTURE.md` — layering, message flow, and *why* it is shaped this way.
 2. `docs/GAME_DESIGN.md` — factions, units, terrain, combat rules.
 3. `docs/PROTOCOL.md` — the exact client/server wire contract.
-4. `docs/DEPLOYMENT.md` — TLS, environment variables, running it for real.
-5. `docs/ROADMAP.md` — pick up the next unchecked item.
+4. `docs/ART_SPEC.md` — what art is needed, at what size, in what format.
+5. `docs/DEPLOYMENT.md` — TLS, environment variables, running it for real.
+6. `docs/ROADMAP.md` — pick up the next unchecked item.
 
 ## Commands
 

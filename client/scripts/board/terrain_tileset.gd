@@ -10,7 +10,18 @@ extends RefCounted
 ## Capturable terrain gets one tile variant per owner (neutral, slot 1,
 ## slot 2, ...) so ownership is part of the tile rather than an overlay.
 
-const OWNER_SLOTS := [0, 1, 2]
+
+## Neutral, then every seat the board can colour. Derived from
+## BoardTheme.SLOT_COLORS rather than written out, because the two must agree:
+## a slot with a colour but no tile variant produced no atlas entry, and
+## Board._render_terrain skipped the cell silently - every building owned by
+## players 3 and 4 was a hole in the map, with no error anywhere.
+static func owner_slots() -> Array:
+	var slots: Array = [0]
+	var coloured: Array = BoardTheme.SLOT_COLORS.keys()
+	coloured.sort()
+	slots.append_array(coloured)
+	return slots
 
 
 ## Returns { tile_set, source_id, coords } where `coords` maps a tile key
@@ -20,7 +31,7 @@ static func build(tile_size: int = BoardTheme.TILE_SIZE) -> Dictionary:
 	for terrain_id in GameData.terrain.keys():
 		var id := String(terrain_id)
 		if bool(GameData.terrain_stats(id).get("capturable", false)):
-			for slot in OWNER_SLOTS:
+			for slot in owner_slots():
 				keys.append(tile_key(id, slot))
 		else:
 			keys.append(tile_key(id, 0))

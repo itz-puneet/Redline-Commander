@@ -30,6 +30,10 @@ The renderer needs Blender on the PATH (4.0 or later). The sheet is
 committed, so this is only needed when a model or a render setting changes -
 you can build and play the game without Blender installed.
 
+Sizes, formats, the mask contract and every check that rejects bad art are
+in `docs/ART_SPEC.md`, along with the recommendation on where unit art
+should go from here.
+
 ## Why it is written down rather than modelled
 
 These are blockouts, not finished art. They exist so the whole path - render,

@@ -29,6 +29,8 @@ var state: MatchState = null
 
 var _unit_nodes: Dictionary = {}   ## unit_id -> Unit
 var _atlas_coords: Dictionary = {}
+## Terrain keys already reported as missing, so the error is logged once.
+var _missing_tiles: Dictionary = {}
 var _source_id: int = -1
 var _framed_map: String = ""
 
@@ -65,7 +67,15 @@ func _render_terrain() -> void:
 
 	for y in state.map_height:
 		for x in state.map_width:
-			var key := TerrainTileSet.tile_key(state.terrain_at(x, y), state.tile_owner_at(x, y))
+			var terrain_id := state.terrain_at(x, y)
+			var key := TerrainTileSet.tile_key(terrain_id, state.tile_owner_at(x, y))
+			if not _atlas_coords.has(key):
+				# Fall back to the unowned variant rather than drawing
+				# nothing: an owner the tileset has no colour for is a bug,
+				# but a hole in the map is a worse way to report it than a
+				# tile that renders as neutral and an error in the log.
+				_report_missing_tile(key)
+				key = TerrainTileSet.tile_key(terrain_id, 0)
 			if _atlas_coords.has(key):
 				terrain_layer.set_cell(Vector2i(x, y), _source_id, _atlas_coords[key])
 
@@ -86,6 +96,16 @@ func _render_units() -> void:
 			unit_layer.add_child(node)
 			_unit_nodes[unit_id] = node
 		node.bind(state.units[unit_id])
+
+
+## Once per key, not once per tile: a map full of a missing variant would
+## otherwise push hundreds of identical errors per redraw.
+func _report_missing_tile(key: String) -> void:
+	if _missing_tiles.has(key):
+		return
+	_missing_tiles[key] = true
+	push_error("Board: no terrain tile for '%s'; drawing it unowned. "
+		% key + "TerrainTileSet.owner_slots() and BoardTheme.SLOT_COLORS disagree.")
 
 
 func unit_node(unit_id: String) -> Unit:

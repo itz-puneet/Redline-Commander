@@ -27,6 +27,7 @@ func _ready() -> void:
 	_check_reconciliation(state)
 	_check_hud_inset(state)
 	_check_coordinates()
+	_check_every_seat_has_tiles(state)
 
 	if _failures == 0:
 		print("\nboard_check: all checks passed")
@@ -189,3 +190,60 @@ func _check_coordinates() -> void:
 		_board.world_at_tile(Vector2i(3, 2)) == Vector2(size * 3, size * 2))
 	_check("negative space maps outside the board",
 		_board.tile_at_world(Vector2(-4, -4)) == Vector2i(-1, -1))
+
+
+## Every seat the board can colour needs a tile variant for every capturable
+## terrain, or the atlas has no entry for that key.
+##
+## This existed as a hole for as long as the board did: OWNER_SLOTS was
+## [0, 1, 2] while BoardTheme.SLOT_COLORS defined four seats, and
+## _render_terrain skipped a key it did not have - so on a three- or
+## four-player map every city and factory owned by players 3 and 4 simply
+## was not drawn, with nothing logged.
+##
+## The two checks below cover the two halves of that, and each was verified
+## against its own mutation - neither catches the other's:
+##   - reverting owner_slots() to [0, 1, 2] fails the coverage check, but
+##     not the draw check, because the fallback added to _render_terrain
+##     now draws the tile unowned instead of skipping it
+##   - removing that fallback fails the draw check
+func _check_every_seat_has_tiles(state: MatchState) -> void:
+	var built: Dictionary = TerrainTileSet.build()
+	var coords: Dictionary = built.get("coords", {})
+	var missing: Array = []
+	for terrain_id in GameData.terrain.keys():
+		if not bool(GameData.terrain_stats(String(terrain_id)).get("capturable", false)):
+			continue
+		for slot in BoardTheme.SLOT_COLORS.keys():
+			var key := TerrainTileSet.tile_key(String(terrain_id), int(slot))
+			if not coords.has(key):
+				missing.append(key)
+	_check("every colourable seat has a tile for every capturable terrain",
+		missing.is_empty(), "no atlas entry for %s" % str(missing))
+
+	# And the board actually draws them. Asserting on the atlas alone would
+	# stay green if _render_terrain dropped the cell anyway.
+	var highest: int = 0
+	for slot in BoardTheme.SLOT_COLORS.keys():
+		highest = maxi(highest, int(slot))
+	var owned := MatchState.from_view(Fixtures.match_view())
+	var capturable := Vector2i(-1, -1)
+	for y in owned.map_height:
+		for x in owned.map_width:
+			if bool(GameData.terrain_stats(owned.terrain_at(x, y)).get("capturable", false)):
+				capturable = Vector2i(x, y)
+				break
+		if capturable.x >= 0:
+			break
+	if capturable.x < 0:
+		_check("the fixture map has a capturable tile to test with", false)
+		return
+	owned.tile_owners[owned.tile_index(capturable.x, capturable.y)] = highest
+	_board.render(owned)
+	var layer: TileMapLayer = _board.terrain_layer
+	_check("a building owned by the highest seat is drawn, not skipped",
+		layer.get_cell_source_id(capturable) >= 0,
+		"seat %d at %s left an empty cell" % [highest, capturable])
+
+	# Put the board back the way the other checks left it.
+	_board.render(state)
