@@ -874,3 +874,89 @@ test("a presence change reports who has not been told", async () => {
   assert.equal(await service.setConnected("guest", matchId, false), null,
     "setting it to what it already was announces nothing");
 });
+
+/* ------------------------------------------------------------------ */
+/* Reef as a naval obstacle                                            */
+/* ------------------------------------------------------------------ */
+
+function navalMatch(): MatchState {
+  let state = createMatch({ matchId: "naval", mapId: "straits", rngSeed: 4242 });
+  const p1 = addPlayer(state, "player-one", "crimson_alliance");
+  assert.ok(p1.ok);
+  const p2 = addPlayer(p1.state, "player-two", "azure_federation");
+  assert.ok(p2.ok);
+  return p2.state;
+}
+
+/** Drops a ship onto a specific tile so naval rules can be exercised
+ *  directly - the map's own start units are all land units. */
+function placeBoat(state: MatchState, x: number, y: number): Unit {
+  const boat: Unit = {
+    id: "boat-1", unitType: "patrol_boat", ownerSlot: 1, x, y,
+    hp: 100, fuel: UNITS.patrol_boat.max_fuel, ammo: UNITS.patrol_boat.max_ammo,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+  };
+  state.units[boat.id] = boat;
+  return boat;
+}
+
+test("a reef is not reachable by a ship, and does not strand it either", () => {
+  const state = navalMatch();
+  const terrainAt = (x: number, y: number) => state.map.tiles[y * state.map.width + x].terrain;
+
+  // Find a reef with open water beside it, rather than hardcoding a
+  // coordinate the map could later move.
+  let reef: { x: number; y: number } | null = null;
+  for (let y = 0; y < state.map.height && !reef; y++) {
+    for (let x = 0; x < state.map.width && !reef; x++) {
+      if (terrainAt(x, y) === "reef" && x > 0 && terrainAt(x - 1, y) === "deep_water") {
+        reef = { x, y };
+      }
+    }
+  }
+  assert.ok(reef, "the straits map should have a reef with water west of it");
+
+  const boat = placeBoat(state, reef.x - 1, reef.y);
+  const reachable = reachableTiles(state, boat);
+
+  assert.ok(
+    !reachable.some((t) => t.x === reef!.x && t.y === reef!.y),
+    "a reef must never appear in a ship's reachable tiles",
+  );
+  // The ship is beside an obstacle, not walled in: it must still have
+  // somewhere to go, or this test would pass on a boat that simply cannot
+  // move at all.
+  assert.ok(reachable.length > 1, "the ship should still be able to move around the reef");
+});
+
+test("a path through a reef is rejected, one around it is accepted", () => {
+  const state = navalMatch();
+  const terrainAt = (x: number, y: number) => state.map.tiles[y * state.map.width + x].terrain;
+
+  let reef: { x: number; y: number } | null = null;
+  for (let y = 0; y < state.map.height && !reef; y++) {
+    for (let x = 0; x < state.map.width && !reef; x++) {
+      if (terrainAt(x, y) === "reef" && x > 0 && terrainAt(x - 1, y) === "deep_water") {
+        reef = { x, y };
+      }
+    }
+  }
+  assert.ok(reef);
+
+  const boat = placeBoat(state, reef.x - 1, reef.y);
+  const through = validatePath(state, boat, [{ x: reef.x, y: reef.y }]);
+  assert.equal(through.ok, false, "sailing onto a reef must be refused");
+
+  // And prove the refusal is about the reef, not about the ship: the same
+  // one-tile step to a navigable neighbour is accepted.
+  const open = [
+    { x: reef.x - 1, y: reef.y - 1 },
+    { x: reef.x - 1, y: reef.y + 1 },
+    { x: reef.x - 2, y: reef.y },
+  ].find((p) =>
+    p.x >= 0 && p.y >= 0 && p.x < state.map.width && p.y < state.map.height &&
+    TERRAIN[terrainAt(p.x, p.y)].move_cost.sea !== null);
+  assert.ok(open, "the reef should have navigable water beside it to steer into");
+  assert.equal(validatePath(state, boat, [open]).ok, true,
+    "a step into open water beside the reef must be allowed");
+});

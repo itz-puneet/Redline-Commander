@@ -136,6 +136,91 @@ static func _build_procedural(tile_size: int) -> Dictionary:
 	return {"tile_set": tile_set, "source_id": source_id, "coords": coords}
 
 
+## Terrain whose tile depends on its neighbours, not only on itself.
+##
+## Two of them, for two different reasons, and the bit means something
+## different in each - which is why this is a lookup rather than one rule:
+##
+##   road          a bit is set when that side continues the road network,
+##                 so a junction can be drawn as a junction instead of four
+##                 unrelated tiles that happen to touch.
+##   shallow_water the shore. A bit is set when that side is LAND, which is
+##                 what decides which edge of the tile carries sand. This is
+##                 what makes a shoreline face the coast it belongs to
+##                 rather than one baked-in direction.
+##
+## deep_water deliberately is not here: open water looks the same whichever
+## way it is turned, so a variant per neighbourhood would be 15 files that
+## all had to be drawn identically.
+const AUTOTILE_TERRAIN := ["road", "shallow_water"]
+
+## What counts as continuing a road. Buildings are on it: a road running
+## into a city should meet the city, not stop a tile short of it.
+const ROAD_CONNECTS := ["road", "city", "factory", "airport", "port", "hq"]
+
+## Everything a ship can be in. Anything else is land as far as the shore is
+## concerned - reef included, since a reef sits in water and takes no beach.
+const WATER_TERRAIN := ["shallow_water", "deep_water", "reef"]
+
+## Bit order for the connectivity mask: N=1, E=2, S=4, W=8.
+const MASK_LETTERS := ["N", "E", "S", "W"]
+
+
+static func autotiles(terrain_id: String) -> bool:
+	return AUTOTILE_TERRAIN.has(terrain_id)
+
+
+## The connectivity mask for a tile, given its four neighbours in N, E, S, W
+## order. A neighbour off the edge of the map is passed as "".
+##
+## Off-map is read differently by the two, and both readings are deliberate:
+## a road reaching the border leaves the map rather than dead-ending at it,
+## so off-map connects; the sea beyond the border is still sea, so off-map
+## is not land and grows no beach.
+static func neighbour_mask(terrain_id: String, neighbours: Array) -> int:
+	var mask := 0
+	for i in mini(neighbours.size(), MASK_LETTERS.size()):
+		if _connects(terrain_id, String(neighbours[i])):
+			mask |= 1 << i
+	return mask
+
+
+static func _connects(terrain_id: String, neighbour: String) -> bool:
+	match terrain_id:
+		"road":
+			return neighbour.is_empty() or ROAD_CONNECTS.has(neighbour)
+		"shallow_water":
+			return not neighbour.is_empty() and not WATER_TERRAIN.has(neighbour)
+		_:
+			return false
+
+
+## "NS", "NESW", or "0" for no connections at all - the suffix a variant
+## file is named for (road_NS.png -> the key "road:0@NS").
+static func mask_suffix(mask: int) -> String:
+	var out := ""
+	for i in MASK_LETTERS.size():
+		if mask & (1 << i):
+			out += MASK_LETTERS[i]
+	return "0" if out.is_empty() else out
+
+
+## The tile keys to try for this tile, most specific first, always ending in
+## the plain key.
+##
+## The fallback is the point. The shipped sheet has no variant art yet - one
+## diagonal road strip, one open-water shallow tile - so every lookup falls
+## through to the base tile and the board draws exactly what it drew before.
+## Adding road_NS.png to art/png/terrain/ and rebuilding is then the whole
+## change: the key appears in the manifest, the specific candidate hits, and
+## roads start meeting at their edges with no code touched.
+static func variant_keys(terrain_id: String, owner_slot: int, mask: int) -> Array:
+	var base := tile_key(terrain_id, owner_slot)
+	if not autotiles(terrain_id):
+		return [base]
+	return ["%s@%s" % [base, mask_suffix(mask)], base]
+
+
 ## Ownership only distinguishes tiles that can actually be owned, so plain
 ## terrain needs a single variant rather than one per slot.
 static func tile_key(terrain_id: String, owner_slot: int) -> String:

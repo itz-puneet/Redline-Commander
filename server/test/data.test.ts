@@ -229,3 +229,125 @@ test("every unit type is buildable on at least one map", () => {
     `no map has a building that produces: ${unbuildable.join(", ")}`,
   );
 });
+
+/* ------------------------------------------------------------------ */
+/* Water, shore and naval obstacles                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Water depth is not decoration - it is what tells a player where a ship
+ * can go and where the shoreline is. These assert the rules the maps are
+ * authored against, so a hand-edited map that scatters deep water against
+ * a beach or drops a reef on a shore fails here rather than shipping.
+ *
+ * The reef rules matter twice over: a reef is impassable to naval units, so
+ * a misplaced one silently walls off part of the sea.
+ */
+
+const WATER = new Set(["shallow_water", "deep_water", "reef"]);
+
+function neighbours4(x: number, y: number, width: number, height: number) {
+  return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const)
+    .map(([dx, dy]) => ({ x: x + dx, y: y + dy }))
+    .filter((p) => p.x >= 0 && p.y >= 0 && p.x < width && p.y < height);
+}
+
+test("reef is impassable to naval units", () => {
+  // The whole obstacle behaviour rests on this single data fact: movement
+  // treats a null cost as impassable, so reachableTiles and validatePath
+  // both refuse it without needing to know what a reef is.
+  assert.equal(TERRAIN.reef.move_cost.sea, null);
+  assert.notEqual(TERRAIN.shallow_water.move_cost.sea, null);
+  assert.notEqual(TERRAIN.deep_water.move_cost.sea, null);
+});
+
+for (const entry of MAP_INDEX) {
+  const { map } = loadMap(entry.id);
+  const at = (x: number, y: number) => map.tiles[y * map.width + x];
+  const waterTiles: { x: number; y: number; terrain: string }[] = [];
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      if (WATER.has(at(x, y).terrain)) waterTiles.push({ x, y, terrain: at(x, y).terrain });
+    }
+  }
+  const touchesLand = (x: number, y: number) =>
+    neighbours4(x, y, map.width, map.height).some((p) => !WATER.has(at(p.x, p.y).terrain));
+
+  test(`${entry.id}: water touching land is shallow, water away from land is not`, () => {
+    const deepOnShore = waterTiles
+      .filter((t) => t.terrain === "deep_water" && touchesLand(t.x, t.y))
+      .map((t) => `${t.x},${t.y}`);
+    const shallowAdrift = waterTiles
+      .filter((t) => t.terrain === "shallow_water" && !touchesLand(t.x, t.y))
+      .map((t) => `${t.x},${t.y}`);
+    assert.deepEqual(deepOnShore, [], `deep water against a shore at: ${deepOnShore.join(" ")}`);
+    assert.deepEqual(
+      shallowAdrift,
+      [],
+      `shallow water stranded in open sea at: ${shallowAdrift.join(" ")}`,
+    );
+  });
+
+  test(`${entry.id}: reefs sit in open water, never against a shore`, () => {
+    const onShore = waterTiles
+      .filter((t) => t.terrain === "reef" && touchesLand(t.x, t.y))
+      .map((t) => `${t.x},${t.y}`);
+    assert.deepEqual(onShore, [], `reef against a shore at: ${onShore.join(" ")}`);
+  });
+
+  test(`${entry.id}: every port can reach every other port by sea`, () => {
+    // With reef impassable, a badly placed one can cut the sea in two, or a
+    // port can end up inland - either way a ship built there is stranded and
+    // nothing else would report it. This is how the straits map was found
+    // with all four of its ports landlocked.
+    const navigable = (x: number, y: number) =>
+      TERRAIN[at(x, y).terrain].move_cost.sea !== null;
+    const ports: string[] = [];
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        if (at(x, y).terrain === "port") ports.push(`${x},${y}`);
+      }
+    }
+    if (ports.length === 0) return; // a land map has nothing to check
+
+    const start = ports[0].split(",").map(Number);
+    const seen = new Set<string>([ports[0]]);
+    const queue = [{ x: start[0], y: start[1] }];
+    while (queue.length) {
+      const cur = queue.pop()!;
+      for (const p of neighbours4(cur.x, cur.y, map.width, map.height)) {
+        const key = `${p.x},${p.y}`;
+        if (seen.has(key) || !navigable(p.x, p.y)) continue;
+        seen.add(key);
+        queue.push(p);
+      }
+    }
+    const stranded = ports.filter((p) => !seen.has(p));
+    assert.deepEqual(stranded, [], `ports unreachable by sea from ${ports[0]}: ${stranded.join(" ")}`);
+  });
+
+  test(`${entry.id}: no road tile is left floating`, () => {
+    // A road with nothing to join reads as a stray strip of tarmac in a
+    // field, and it is the map that is wrong, not the art - no tile can be
+    // drawn that makes a one-tile road look deliberate. Buildings count:
+    // a road running up to a city has arrived somewhere. So does the map
+    // edge, since a road leaving the board is not a dead end.
+    //
+    // Kept in step with TerrainTileSet.ROAD_CONNECTS in
+    // client/scripts/board/terrain_tileset.gd, which chooses the tile from
+    // exactly this relation. Found four such stubs in `crossing`.
+    const joins = (x: number, y: number) =>
+      x < 0 || y < 0 || x >= map.width || y >= map.height ||
+      at(x, y).terrain === "road" || TERRAIN[at(x, y).terrain].capturable === true;
+    const floating: string[] = [];
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        if (at(x, y).terrain !== "road") continue;
+        if (!joins(x, y - 1) && !joins(x + 1, y) && !joins(x, y + 1) && !joins(x - 1, y)) {
+          floating.push(`${x},${y}`);
+        }
+      }
+    }
+    assert.deepEqual(floating, [], `road tiles with nothing to connect to: ${floating.join(" ")}`);
+  });
+}

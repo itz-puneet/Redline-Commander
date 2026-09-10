@@ -27,6 +27,24 @@ from PIL import Image
 
 TILE = 48
 
+# Kept in step with TerrainTileSet.AUTOTILE_TERRAIN and MASK_LETTERS in
+# client/scripts/board/terrain_tileset.gd. A terrain listed here may supply
+# one tile per neighbourhood - `road_NS.png`, `shallow_water_NE.png` - in
+# addition to its plain tile. Variants are optional: the client asks for the
+# specific key first and falls back to the plain one, so a partial set is a
+# partial improvement rather than a hole in the map.
+AUTOTILE_TERRAIN = ["road", "shallow_water"]
+MASK_LETTERS = ["N", "E", "S", "W"]
+
+
+def mask_suffixes():
+    """All 16 neighbourhoods, in mask order, as the client names them."""
+    out = []
+    for mask in range(16):
+        letters = "".join(MASK_LETTERS[i] for i in range(4) if mask & (1 << i))
+        out.append(letters or "0")
+    return out
+
 
 def owner_slots():
     """Neutral, then whatever seats client/scripts/board/board_theme.gd
@@ -57,6 +75,7 @@ def main():
 
     keys = []
     missing = []
+    variants = []
     for terrain_id, stats in terrain.items():
         capturable = bool(stats.get("capturable", False))
         if capturable:
@@ -66,11 +85,20 @@ def main():
         else:
             keys.append((tile_key(terrain_id, False, 0),
                          os.path.join(source, "%s.png" % terrain_id)))
+        if terrain_id in AUTOTILE_TERRAIN:
+            for suffix in mask_suffixes():
+                path = os.path.join(source, "%s_%s.png" % (terrain_id, suffix))
+                if os.path.exists(path):
+                    variants.append(("%s@%s" % (tile_key(terrain_id, False, 0), suffix),
+                                     path))
     for key, path in keys:
         if not os.path.exists(path):
             missing.append(path)
     if missing:
         raise SystemExit("missing terrain art:\n  " + "\n  ".join(missing))
+
+    # Variants last, so adding one never renumbers an existing tile.
+    keys.extend(variants)
 
     os.makedirs(out_dir, exist_ok=True)
     sheet = Image.new("RGBA", (TILE * len(keys), TILE), (0, 0, 0, 0))
@@ -105,7 +133,8 @@ def main():
     with open(os.path.join(out_dir, "terrain.json"), "w") as handle:
         json.dump(manifest, handle, indent=2, sort_keys=True)
         handle.write("\n")
-    print("TERRAIN_SHEET_OK %d tiles -> %s" % (len(keys), out_dir))
+    print("TERRAIN_SHEET_OK %d tiles (%d neighbour variants) -> %s"
+          % (len(keys), len(variants), out_dir))
 
 
 main()

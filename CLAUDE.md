@@ -110,6 +110,16 @@ layout of the code, so keep them that way.
    and not currently used to produce the shipped sheet. Do not extend them
    without being asked - PNG is the live path.
 
+   Roads and shorelines cannot be drawn from one tile alone, so
+   `TerrainTileSet` picks them by a 4-bit mask of their neighbours (N=1,
+   E=2, S=4, W=8) and asks the sheet for `road:0@NS` before falling back to
+   `road:0`. For a road a side connects when it continues the network; for
+   shallow water a side is set when it is *land*, which is what points the
+   sand at the coast. The variant art does not exist yet, so every lookup
+   currently falls back - see `art/png/README.md` for the exact list. Never
+   make the fallback an error: a missing variant is a shoreline that does
+   not know which way the land is, not a hole in the map.
+
    Terrain works the same way through a sibling script,
    `art/png/build_terrain_sheet.py`, into
    `client/assets/terrain/{terrain.png,terrain.json}` -
@@ -201,6 +211,9 @@ godot --headless res://tests/sprite_check.tscn # the unit sheet covers every uni
 # These need a real renderer - use xvfb on a headless machine.
 xvfb-run -a godot --resolution 1280x720 res://tests/gesture_check.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/board_preview.tscn
+# The ground on its own, at the zoom the game frames it at - no units, no
+# fog, no HUD, because those sit on the tiles you are trying to look at.
+xvfb-run -a godot --resolution 1280x720 res://tests/terrain_preview.tscn -- --map straits
 xvfb-run -a godot --resolution 1280x720 res://tests/lobby_preview.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/animation_preview.tscn
 xvfb-run -a godot --resolution 1280x720 res://tests/build_preview.tscn

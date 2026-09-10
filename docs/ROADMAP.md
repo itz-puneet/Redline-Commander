@@ -76,11 +76,21 @@ Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
       (which stays as the fallback for a checkout with no sheet).
       `board_check` verifies the real sheet is actually what loads, not a
       silent fallback. See `art/png/README.md`.
-- [ ] Seamless terrain tiling. The art landed above is not that: each
-      terrain type is one illustrated vignette (a single river crossing, one
-      tree cluster), not a texture authored to repeat, so the same type
-      placed beside itself on a real map shows a visible seam. Real tiling
-      art - edges that match their neighbours - is separate work.
+- [x] Neighbour-aware tile selection. `TerrainTileSet` chooses a road or
+      shoreline tile from a 4-bit connectivity mask of its neighbours
+      (N/E/S/W) and falls back to the plain tile when the sheet has no
+      variant, so art can land a file at a time. `build_terrain_sheet.py`
+      picks up `road_NS.png`, `shallow_water_NE.png` and the like with no
+      code change.
+- [ ] Seamless terrain tiling. The art is still one illustrated vignette per
+      type (a single river crossing, one tree cluster), not a texture
+      authored to repeat, and **none of the 20 neighbour variants the
+      mechanism above wants have been drawn** - 14 roads and 6 shorelines,
+      listed exactly in `art/png/README.md`. Until they are, roads are a
+      diagonal strip at every junction and shorelines have no beach.
+      Three existing tiles are wrong for where they are used, too: the road
+      is a diagonal, the reef is painted on shallow water when it only ever
+      sits in deep, and every building sits on opaque black.
 - [ ] Wire the cropped-and-staged overlays, VFX and emblems
       (`art/png/overlays/`, `art/png/vfx/`, `art/png/emblems/`) into the
       renderer: selection/range highlights still draw flat translucent

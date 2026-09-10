@@ -21,9 +21,12 @@ const SCENARIO_UNITS := [
 
 
 ## `reveal_all` skips the fog computation, for tests that care about logic
-## rather than visibility.
-static func match_view(reveal_all: bool = false) -> Dictionary:
-	var map_data := GameData.load_map("crossing")
+## rather than visibility. `map_id` defaults to the land map every existing
+## test is written against; a preview can ask for another to look at terrain
+## the default map has none of - `crossing` has no water at all, so the
+## shoreline and reef work is invisible on it.
+static func match_view(reveal_all: bool = false, map_id: String = "crossing") -> Dictionary:
+	var map_data := GameData.load_map(map_id)
 	var width := int(map_data.get("width", 0))
 	var height := int(map_data.get("height", 0))
 
@@ -42,7 +45,7 @@ static func match_view(reveal_all: bool = false) -> Dictionary:
 		"roundNumber": 4,
 		"winnerSlot": null,
 		"map": {
-			"id": "crossing",
+			"id": map_id,
 			"displayName": String(map_data.get("display_name", "")),
 			"width": width, "height": height,
 			"terrain": terrain, "tileOwners": owners,

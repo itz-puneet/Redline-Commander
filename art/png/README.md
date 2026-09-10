@@ -107,6 +107,63 @@ improvement over a flat colour rectangle, and is what ships today, but true
 seamless tiling - edges authored to match their neighbours - is separate,
 harder art work this set does not attempt.
 
+## Neighbour-aware variants (roads and shorelines)
+
+A road and a shoreline cannot be drawn from the tile alone - a road has to
+know which sides continue, and a beach has to know which side the land is
+on. `TerrainTileSet` therefore asks the sheet for a *specific* tile first
+and falls back to the plain one, so the sheet can carry as many or as few
+as exist:
+
+```
+road_NS.png            -> the key road:0@NS
+shallow_water_NE.png   -> the key shallow_water:0@NE
+```
+
+The suffix is the set of connected sides in **N, E, S, W** order. For a
+road a side counts when it continues the network - another road, or a
+building, or the edge of the map. For shallow water a side counts when it
+is **land**, which is what decides which edge carries sand; reef and deep
+water are sea, and so is anything beyond the map edge.
+
+**None of these files exist yet, and that is the whole of what is missing.**
+Until they do, every lookup falls back to `road.png` and
+`shallow_water.png`, which is what ships today: one diagonal highway strip
+repeated at every junction, and an open-water tile with no beach on any
+edge. `board_check` prints the list of variants the shipped maps ask for
+and cannot get.
+
+What the two shipped maps need, exactly:
+
+| | files | which |
+|---|---|---|
+| roads | 14 | `road_{N,E,S,W,NE,NS,NW,ES,SW,NES,NEW,NSW,ESW,NESW}.png` |
+| shorelines | 6 | `shallow_water_{N,S,NE,NW,ES,SW}.png` |
+
+Both sets are rotations of far fewer drawings - the 14 roads are an end, a
+straight, a corner, a tee and a crossroads (5 sprites) turned four ways;
+the 6 shores are a straight coast and an inside corner (2 sprites). Nothing
+generates those rotations yet, so today it is 20 files. `road_0.png`
+(a one-tile road) and `road_EW.png` (an east-west straight) are the two
+neighbourhoods no shipped map produces, and are not needed.
+
+Two existing tiles are also wrong for where they are used, and no amount of
+neighbour logic fixes either:
+
+- **`road.png` is a diagonal.** A two-lane highway running corner to
+  corner cannot be part of an orthogonal network at any orientation, so it
+  is not usable as the fallback *or* as the base for the 14 above. The
+  variants have to be drawn as orthogonal road, meeting their neighbours at
+  the middle of each tile edge.
+- **`reef.png` is painted on shallow water.** Reefs sit in deep water by
+  the map rules (`server/test/data.test.ts` enforces it), so the tile reads
+  as a pale patch in the middle of the dark channel. It needs a deep-water
+  background.
+- **Every building tile is painted on opaque black** (`city_*.png`,
+  `hq_*.png`, `factory_*.png`, `airport_*.png`, `port_*.png`). On the board
+  that is a black card under each building instead of ground. They want the
+  surrounding terrain's tone, not black.
+
 ## Overlays, effects and emblems
 
 `art/png/overlays/`, `art/png/vfx/` and `art/png/emblems/` hold the

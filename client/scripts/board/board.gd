@@ -68,7 +68,7 @@ func _render_terrain() -> void:
 	for y in state.map_height:
 		for x in state.map_width:
 			var terrain_id := state.terrain_at(x, y)
-			var key := TerrainTileSet.tile_key(terrain_id, state.tile_owner_at(x, y))
+			var key := _terrain_tile_key(x, y, terrain_id)
 			if not _atlas_coords.has(key):
 				# Fall back to the unowned variant rather than drawing
 				# nothing: an owner the tileset has no colour for is a bug,
@@ -78,6 +78,32 @@ func _render_terrain() -> void:
 				key = TerrainTileSet.tile_key(terrain_id, 0)
 			if _atlas_coords.has(key):
 				terrain_layer.set_cell(Vector2i(x, y), _source_id, _atlas_coords[key])
+
+
+## The tile to draw at (x, y): the neighbour-aware variant when the sheet
+## carries one, the plain tile when it does not.
+##
+## A missing variant is not reported as an error, unlike a missing owner
+## slot above. It is the normal case today - no variant art has been drawn
+## yet - and it is not a hole in the map, just a shoreline that does not
+## know which way the land is.
+func _terrain_tile_key(x: int, y: int, terrain_id: String) -> String:
+	var owner_slot := state.tile_owner_at(x, y)
+	if not TerrainTileSet.autotiles(terrain_id):
+		return TerrainTileSet.tile_key(terrain_id, owner_slot)
+
+	var neighbours := [
+		state.terrain_at(x, y - 1),
+		state.terrain_at(x + 1, y),
+		state.terrain_at(x, y + 1),
+		state.terrain_at(x - 1, y),
+	]
+	var mask := TerrainTileSet.neighbour_mask(terrain_id, neighbours)
+	var candidates := TerrainTileSet.variant_keys(terrain_id, owner_slot, mask)
+	for candidate in candidates:
+		if _atlas_coords.has(candidate):
+			return String(candidate)
+	return String(candidates[candidates.size() - 1])
 
 
 ## Reconciles the unit nodes against the state: update what is still there,
