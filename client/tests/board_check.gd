@@ -343,7 +343,7 @@ func _check_variant_preference() -> void:
 ## Verified against two mutations:
 ##   - dropping the `_atlas_coords.has()` test from the candidate loop in
 ##     Board._terrain_tile_key, so the specific key wins whether or not the
-##     sheet carries it: the resolution check fails with shallow_water:0@NW
+##     sheet carries it: the resolution check fails with shallow_water:0@NESW
 ##   - that, plus dropping the owner fallback in _render_terrain, which is
 ##     what was masking it: 58 tiles of the water map and 38 of the land map
 ##     go empty, and the drawn-cells checks fail too
@@ -364,32 +364,40 @@ func _check_water_map_renders(state: MatchState) -> void:
 		"%d of %d" % [layer.get_used_cells().size(), water.map_width * water.map_height])
 
 	# A variant the sheet genuinely has no art for still has to fall back to
-	# the plain tile rather than resolve to a key nothing can draw. Roads
-	# supply the case: art/png/terrain/ has no road_N.png (a dead-end piece),
-	# and straits has one, so this exercises the fallback against real
-	# rather than fabricated data - if a future art drop fills in the last
-	# road ends, this check starts failing its premise loudly (no candidate
-	# tile found) rather than silently passing on the wrong thing.
+	# the plain tile rather than resolve to a key nothing can draw. Both
+	# maps' road ends and every shoreline they use now have real art (see
+	# art/png/README.md), so there is no longer a naturally-occurring case
+	# on shipped data to exercise this with - the fallback still matters
+	# for the day a map uses a shape today's art does not cover, so this
+	# builds one: a 3x3 island of shallow water walled in by plains on all
+	# four sides, a shape no sheet has drawn (open water does not come
+	# landlocked). If art is ever added for shallow_water:0@NESW too, this
+	# starts failing its own premise loudly (coords.has() below goes true)
+	# rather than silently passing on the wrong thing.
 	var built: Dictionary = TerrainTileSet.build()
 	var coords: Dictionary = built.get("coords", {})
-	var dead_end := Vector2i(-1, -1)
-	for y in water.map_height:
-		for x in water.map_width:
-			if water.terrain_at(x, y) != "road":
-				continue
-			var mask := TerrainTileSet.neighbour_mask("road", [
-				water.terrain_at(x, y - 1), water.terrain_at(x + 1, y),
-				water.terrain_at(x, y + 1), water.terrain_at(x - 1, y)])
-			if TerrainTileSet.mask_suffix(mask).length() == 1:
-				dead_end = Vector2i(x, y)
-				break
-		if dead_end.x >= 0:
-			break
-	_check("straits has a road end to test the fallback with", dead_end.x >= 0)
-	if dead_end.x >= 0:
-		var resolved: String = _board._terrain_tile_key(dead_end.x, dead_end.y, "road")
-		_check("a variant with no art falls back to the plain tile",
-			resolved == "road:0", "resolved to %s" % resolved)
+	var landlocked := MatchState.from_view({
+		"matchId": "fixture", "phase": "active", "version": 1,
+		"youSlot": 1, "currentSlot": 1, "roundNumber": 1, "winnerSlot": null,
+		"map": {
+			"id": "landlocked-shore", "displayName": "", "width": 3, "height": 3,
+			"terrain": [
+				"plains", "plains", "plains",
+				"plains", "shallow_water", "plains",
+				"plains", "plains", "plains",
+			],
+			"tileOwners": [0, 0, 0, 0, 0, 0, 0, 0, 0],
+		},
+		"players": [], "units": [], "visibleTiles": range(9),
+	})
+	var surrounded_key := "shallow_water:0@NESW"
+	_check("the fallback's premise still holds - no art for a landlocked shore",
+		not coords.has(surrounded_key), "found an atlas entry for %s" % surrounded_key)
+	_board.render(landlocked)
+	var resolved: String = _board._terrain_tile_key(1, 1, "shallow_water")
+	_check("a variant with no art falls back to the plain tile",
+		resolved == "shallow_water:0", "resolved to %s" % resolved)
+	_board.render(water)  # back to the real map for the checks below
 
 	# The shoreline, the opposite case: every orientation straits uses IS in
 	# the sheet now (art/png/terrain/shallow_water_*.png), so this checks the

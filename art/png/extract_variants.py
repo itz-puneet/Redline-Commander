@@ -1,36 +1,39 @@
 #!/usr/bin/env python3
-"""Crop road and shoreline neighbour-variants out of a generated reference
-sheet.
+"""Crop road and shoreline neighbour-variants out of one or more generated
+reference sheets.
 
-    art/png/extract_variants.py <sheet.png>
+    art/png/extract_variants.py <sheet.png> [<sheet.png> ...]
 
 Writes the results straight into art/png/terrain/, in the naming
 build_terrain_sheet.py already knows how to pick up (`road_NS.png`,
-`shallow_water_NE.png`, ...). Re-run it if the source sheet is regenerated;
-it always re-derives from the source rather than touching a previous run's
-output.
+`shallow_water_NE.png`, ...). Re-run it if a source sheet is regenerated or
+a new one is added; it always re-derives from the source sheets given
+rather than touching a previous run's output, and a later sheet never
+overrides an orientation an earlier one already supplied.
 
-The source sheet this was built against is a generated reference image
-laying out labelled road and shoreline tiles on a grid, each drawn as an
-opaque rounded card against a transparent background (see art/png/README.md
-for the full picture). Two things this script does NOT trust from that
-sheet, both discovered the hard way by measuring the art instead of reading
-the filenames printed under each tile:
+The source sheets this runs against are generated reference images laying
+out labelled road and/or shoreline tiles on a grid, each drawn as an opaque
+rounded card against a transparent background (see art/png/README.md for
+the full picture, including which sheet supplied which file). Two things
+this script does NOT trust from a sheet, both discovered the hard way by
+measuring the art instead of reading the filenames printed under each tile:
 
-1. Card position. The grid is close to even but not exact - this locates
+1. Card position. A grid can be close to even but not exact - this locates
    every card's true bounding box from its own alpha channel (the
    background is transparent, each card is not) rather than assuming a
-   fixed pitch, which drifted by 10+px across a row of six on the one
-   generated sheet this was written for.
+   fixed pitch, which drifted by 10+px across a row of six on one sheet
+   this was written against.
 
-2. The caption. Several of this sheet's captions did not match what was
-   actually drawn (art/png/README.md has the full list - a duplicate
-   straight road under two dead-end names, corners swapped left for right).
-   road_suffix() and shore_suffix() below classify every tile by measuring
-   its content - which sides the road touches; which quadrants are land vs
-   water - rather than trusting the filename. Do the same for any future
-   sheet before wiring its output in: a caption is a hint, not ground
-   truth.
+2. The caption. Several captions across the sheets this has ingested did
+   not match what was actually drawn (art/png/README.md has the full list -
+   a duplicate straight road under two dead-end names, shoreline corners
+   swapped left for right, and a whole sheet of dead-end pieces where every
+   cap pointed the opposite way from its filename - `road_N.png` drawn as
+   the *south* end of a road, not the north). `road_suffix()` and
+   `shore_suffix()` below classify every tile by measuring its content -
+   which sides the road touches; which quadrants are land vs water -
+   rather than trusting the filename. Do the same for any future sheet
+   before wiring its output in: a caption is a hint, not ground truth.
 """
 
 import os
@@ -148,70 +151,73 @@ def shore_suffix(sheet, box):
     return SHORE_PATTERNS.get(land, "UNHANDLED:" + ",".join(sorted(land)) or "0")
 
 
+def classify(sheet, box):
+    """('road', suffix) or ('shore', suffix) or (None, reason) - tried
+    without assuming which family a box belongs to (road and shoreline
+    cards on the first sheet this ran against happened to be two
+    different sizes; a later sheet of dead-end road tiles only, run
+    through the same bimodal-width split, would have had some of its
+    tiles guessed into the shoreline bucket on width alone). A road box
+    has asphalt touching at least one edge; a shoreline box does not, and
+    is classified by which corners are land instead."""
+    suffix = road_suffix(sheet, box)
+    if suffix != "0":
+        return "road", suffix
+    suffix = shore_suffix(sheet, box)
+    if not suffix.startswith("UNHANDLED"):
+        return "shore", suffix
+    return None, suffix
+
+
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    sheet = Image.open(sys.argv[1]).convert("RGBA")
 
-    boxes = find_cards(sheet)
-    # Road cards (bigger of the two sizes on this sheet) sort by row then
-    # column; same for shoreline cards, which are the wider ones.
-    boxes.sort(key=lambda b: (round(b[1] / 40), b[0]))
-    widths = sorted(b[2] - b[0] for b in boxes)
-    split = widths[len(widths) // 2] + 10  # midpoint between the two sizes
-    road_boxes = [b for b in boxes if (b[2] - b[0]) < split]
-    shore_boxes = [b for b in boxes if (b[2] - b[0]) >= split]
+    # No shipped map uses a plain east-west road or a plain west-facing
+    # shore - both genuinely present on sheets this has ingested, neither
+    # needed - so they are left out rather than shipped untested alongside
+    # the rest. Kept separate per kind: "W" is a real, needed road (a
+    # single-connection dead end) even though it is an unneeded shoreline.
+    NOT_NEEDED = {"road": {"EW"}, "shore": {"W"}}
 
-    # No shipped map uses a plain east-west straight or a plain west-facing
-    # shore - both genuinely present on this sheet, neither needed - so
-    # they are left out rather than shipped untested alongside the rest.
-    NOT_NEEDED = {"EW", "W"}
+    road_tiles = {}
+    shore_tiles = {}
+    for sheet_path in sys.argv[1:]:
+        sheet = Image.open(sheet_path).convert("RGBA")
+        boxes = find_cards(sheet)
+        boxes.sort(key=lambda b: (round(b[1] / 40), b[0]))  # row, then column
+        for box in boxes:
+            kind, suffix = classify(sheet, box)
+            if kind is None:
+                print("  skipping unclassifiable card at %s in %s (%s)"
+                      % (box, sheet_path, suffix))
+                continue
+            if suffix == "0" or suffix in NOT_NEEDED[kind]:
+                continue  # isolated (nothing to draw) or a known-unneeded shape
+            tiles = road_tiles if kind == "road" else shore_tiles
+            if suffix in tiles:
+                continue  # a duplicate reading of an orientation already kept
+            tiles[suffix] = crop_tile(sheet, box)
+
+    # The corner orientations no source sheet genuinely drew, derived by
+    # rotating one that was, is a mechanical transform of real art, not new
+    # content. See the module docstring for how this was verified.
+    if "NW" in shore_tiles and "ES" not in shore_tiles:
+        shore_tiles["ES"] = shore_tiles["NW"].transpose(Image.ROTATE_180)
+    if "NW" in shore_tiles and "SW" not in shore_tiles:
+        shore_tiles["SW"] = shore_tiles["NW"].transpose(Image.ROTATE_90)
+    if "N" in shore_tiles and "S" not in shore_tiles:
+        shore_tiles["S"] = shore_tiles["N"].transpose(Image.ROTATE_180)
 
     written = []
-    road_tiles = {}
-    for box in road_boxes:
-        suffix = road_suffix(sheet, box)
-        if suffix == "0" or len(suffix) == 1:
-            # Every single-letter reading on this sheet turned out to be a
-            # mislabelled straight-through road (see the module docstring),
-            # not a genuine dead end - skip rather than ship the wrong shape
-            # under the right name.
-            continue
-        if suffix in NOT_NEEDED or suffix in road_tiles:
-            continue  # not needed, or a duplicate reading already kept
-        road_tiles[suffix] = crop_tile(sheet, box)
     for suffix, tile in road_tiles.items():
         name = f"road_{suffix}.png"
         tile.save(os.path.join(OUT_DIR, name))
         written.append(name)
-
-    shore_tiles = {}
-    for box in shore_boxes:
-        suffix = shore_suffix(sheet, box)
-        if suffix.startswith("UNHANDLED") or suffix in NOT_NEEDED or suffix in shore_tiles:
-            continue  # unhandled shape, not needed, or a duplicate reading
-        shore_tiles[suffix] = crop_tile(sheet, box)
-
     for suffix, tile in shore_tiles.items():
         name = f"shallow_water_{suffix}.png"
         tile.save(os.path.join(OUT_DIR, name))
         written.append(name)
-
-    # The corner orientations this sheet did not genuinely draw, derived by
-    # rotating one it did - a mechanical transform of real art, not new
-    # content. See the module docstring for how this was verified.
-    if "NW" in shore_tiles:
-        derived = {
-            "S": None, "ES": shore_tiles["NW"].transpose(Image.ROTATE_180),
-            "SW": shore_tiles["NW"].transpose(Image.ROTATE_90),
-        }
-        if "N" in shore_tiles:
-            derived["S"] = shore_tiles["N"].transpose(Image.ROTATE_180)
-        for suffix, tile in derived.items():
-            name = f"shallow_water_{suffix}.png"
-            if tile is not None and not os.path.exists(os.path.join(OUT_DIR, name)):
-                tile.save(os.path.join(OUT_DIR, name))
-                written.append(name)
 
     print("wrote %d variant files to %s:" % (len(written), OUT_DIR))
     for name in sorted(written):

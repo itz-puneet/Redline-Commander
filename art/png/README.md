@@ -139,39 +139,48 @@ the 6 shores are a straight coast and an inside corner (2 sprites). `road_0.png`
 (a one-tile road) and `road_EW.png` (an east-west straight) are the two
 neighbourhoods no shipped map produces, and are not needed.
 
-**16 of the 20 are in as of the second art drop; 4 are still missing.**
-All 6 shoreline variants and 10 of the 14 road variants are in
-`art/png/terrain/`, ingested from a generated reference sheet and cropped
-with `art/png/extract_variants.py`. Still missing, because no source art
-exists for them: **`road_N.png`, `road_E.png`, `road_S.png`, `road_W.png`**
-- a road that terminates and connects on only one side (a dead end). The
-  sheet's four single-letter road tiles all turned out to be straight
-  through-roads in disguise (see below), which is the wrong shape for a
-  dead end and was not used. Until real dead-end art exists, straits and
-  crossing's five single-connection road tiles fall back to `road.png`
-  (the diagonal) - a visible seam where the network dead-ends, not a gap.
+**All 20 are in, as of a third art drop.** Every road and shoreline
+variant the two shipped maps use is now in `art/png/terrain/`, ingested
+from two generated reference sheets and cropped with
+`art/png/extract_variants.py` (which takes any number of sheets on one
+run and re-derives everything from them, so a later drop never has to be
+merged by hand into an earlier one's output).
 
-**The source sheet's captions did not reliably match its art**, and this
-is worth knowing before trusting a generated reference sheet again. Every
-tile was verified by measuring which sides its content actually touches
-(asphalt for roads, grass-vs-water for shorelines), not by trusting the
-filename in the caption:
-- All 14 road captions were correct except the four single-letter ones
-  (`road_N`, `road_E`, `road_S`, `road_W`), which all measured as full
-  straight-through roads (`NS` or `EW`) - duplicates of `road_NS`, not
-  dead ends. None of the four were usable for what their name promised.
-- Of the 6 shoreline captions, only 3 were correct: `shallow_water_N` and
-  two of the four corners. `shallow_water_S` was measured as another `N`
-  (land touching the top edge, not the bottom - an exact duplicate);
-  `shallow_water_NE` measured as `NW`; `shallow_water_NW` measured as `NE`;
-  `shallow_water_ES` measured as a plain `W` straight, not a corner at all.
-- The 3 missing shoreline orientations (`S`, `ES`, `SW`) were produced by
-  rotating the 3 genuinely-drawn ones 180/90 degrees - shorelines have no
+**Neither source sheet's captions reliably matched its art**, and this is
+worth knowing before trusting a generated reference sheet a third time.
+Every tile was verified by measuring which sides its content actually
+touches (asphalt for roads, grass-vs-water for shorelines), never by
+trusting the filename in the caption:
+- On the first sheet (14 road + 6 shoreline tiles), all 14 road captions
+  were correct except the four single-letter ones (`road_N`, `road_E`,
+  `road_S`, `road_W`), which all measured as full straight-through roads
+  (`NS` or `EW`) - duplicates of `road_NS`, not the dead ends their name
+  promised, and not used. Of the 6 shoreline captions, only 3 were
+  correct: `shallow_water_N` and two of the four corners.
+  `shallow_water_S` measured as another `N` (land on the top edge, not
+  the bottom - an exact duplicate); `shallow_water_NE` measured as `NW`;
+  `shallow_water_NW` measured as `NE`; `shallow_water_ES` measured as a
+  plain `W` straight, not a corner at all. The 3 missing shoreline
+  orientations (`S`, `ES`, `SW`) were produced by rotating the 3
+  genuinely-drawn ones 180/90 degrees instead - shorelines have no
   baked-in asymmetry beyond which way they face, so this is a mechanical
   transform of real art, not new content. Verified before trusting it:
   rotating the genuine `NW` tile 90 degrees clockwise reproduces the
   genuine `NE` tile (both independently present in the sheet), almost
   pixel for pixel.
+- The second sheet supplied exactly the 4 missing road dead ends
+  (`road_N/E/S/W.png`) - and every single one had its cap pointing the
+  *wrong* way: the tile captioned `road_N.png` measured as connecting
+  south, not north (asphalt touching the bottom edge, a rounded dead-end
+  cap at the top - the opposite of what "the north piece" needs to mean
+  for `TerrainTileSet`'s neighbour mask). All four were a clean N/S and
+  E/W swap of their caption, corrected the same way as the first sheet:
+  by measuring which edge the road actually touches, not by reading the
+  filename.
+
+`extract_variants.py`'s docstring has the mechanics (alpha-derived card
+bounds, the per-tile content classifiers) for anyone ingesting a further
+sheet - the lesson generalises past this one.
 
 Two more tiles are wrong for where they are used, and no amount of
 neighbour logic fixes either:

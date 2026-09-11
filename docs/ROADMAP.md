@@ -82,16 +82,17 @@ Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
       variant, so art can land a file at a time. `build_terrain_sheet.py`
       picks up `road_NS.png`, `shallow_water_NE.png` and the like with no
       code change.
-- [x] Road and shoreline neighbour variants, mostly. 16 of the 20 the
-      mechanism above wants are in: all 6 shoreline orientations, 10 of
-      the 14 road ones, cropped from a generated reference sheet by
-      `art/png/extract_variants.py` (which measures each tile's actual
-      content rather than trusting its caption - several were mislabelled,
-      see `art/png/README.md`). Still missing: `road_N/E/S/W.png`, a road
-      that dead-ends on one side - the sheet's four single-letter tiles
-      all turned out to be mislabelled straight-throughs, not dead ends,
-      so straits and crossing's five dead-end tiles still fall back to
-      the diagonal `road.png`.
+- [x] Road and shoreline neighbour variants: all 20 the mechanism above
+      wants are in, cropped from two generated reference sheets by
+      `art/png/extract_variants.py`, which measures each tile's actual
+      content rather than trusting its caption - on both sheets, several
+      tiles' captions did not match what was drawn (a duplicate straight
+      road under two dead-end names; shoreline corners swapped; a whole
+      sheet of dead ends each capped the opposite way from its filename).
+      See `art/png/README.md` for the full account. Roads now meet at
+      every corner, tee and crossroads on both shipped maps, and every
+      dead end terminates cleanly instead of falling back to the diagonal
+      `road.png`.
 - [ ] Seamless terrain tiling. The art beyond the two sets above is still
       one illustrated vignette per type (a single river crossing, one tree
       cluster), not a texture authored to repeat. Three existing tiles are
