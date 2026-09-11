@@ -113,7 +113,11 @@ Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
 - [ ] Campaign missions 1–3
 
 ## Phase 5 — Polish and ship
-- [ ] Sound and music (original or properly licensed)
+- [ ] Sound and music (original or properly licensed). Specified in
+      `docs/AUDIO_SPEC.md` - every sound the nine server events, the UI and
+      the two maps need, with the duration the animator allows each one.
+      Nothing is built yet: there is no `AudioManager`, no bus layout and no
+      `client/assets/audio/`, and the engine half should land first.
 - [ ] UI/UX pass, animations, damage popups
 - [ ] Push notifications for "it's your turn"
 - [x] TLS (`wss://`) — the server terminates it or sits behind a proxy, and
