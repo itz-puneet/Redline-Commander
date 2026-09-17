@@ -9,7 +9,9 @@
  * the networking layer replaceable.
  */
 
-import { FACTIONS, loadMap, moveCost, terrainStats, tileAt, unitStats } from "./data";
+import {
+  FACTIONS, directiveEffect, loadMap, moveCost, terrainStats, tileAt, unitStats,
+} from "./data";
 import { canEngage, displayHp, resolveCombat } from "./combat";
 import { inBounds, manhattan, unitAt, validatePath } from "./movement";
 import { isVisibleTo, visibleTiles } from "./vision";
@@ -126,6 +128,8 @@ export function addPlayer(
     faction,
     funds: 0,
     directiveCharge: 0,
+    activeDirective: null,
+    directiveTurnsLeft: 0,
     defeated: false,
     connected: true,
     // Nothing is known until it is seen; refreshKnownTiles fills in the
@@ -184,6 +188,8 @@ function dispatch(state: MatchState, slot: number, action: Action): ActionResult
       return doBuild(state, slot, action.unitType, action.at);
     case "wait":
       return doWait(state, slot, action.unitId);
+    case "directive":
+      return doDirective(state, slot);
     case "load":
       return doLoad(state, slot, action.unitId, action.transportId);
     case "unload":
@@ -301,6 +307,14 @@ function doAttack(
   next.rngCounter = outcome.rngCounter;
 
   const events: GameEvent[] = [];
+  // Both sides charge on the exchange, before anyone dies: a unit that
+  // traded its life still earned its owner the charge for the hit it took.
+  addDirectiveCharge(next, attacker.ownerSlot, displayHp(outcome.damage));
+  addDirectiveCharge(next, defender.ownerSlot, displayHp(outcome.damage));
+  if (outcome.counterDamage > 0) {
+    addDirectiveCharge(next, defender.ownerSlot, displayHp(outcome.counterDamage));
+    addDirectiveCharge(next, attacker.ownerSlot, displayHp(outcome.counterDamage));
+  }
   defender.hp -= outcome.damage;
   if (attacker.ammo !== null) attacker.ammo = Math.max(0, attacker.ammo - 1);
 
@@ -436,6 +450,62 @@ function doWait(state: MatchState, slot: number, unitId: string): ActionResult {
   return { ok: true, state: next, events: [] };
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Field Directives                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Charge earned from one exchange, for both sides.
+ *
+ * Both the dealer and the taker of damage charge, in display-HP: being in
+ * the fight is what builds a directive, so a player who is losing ground
+ * still works toward theirs rather than falling further behind. One pip of
+ * damage is one point, so a full 100-point charge is ten clean hits.
+ *
+ * Mutates `state` in place - only ever called on an already-cloned state.
+ */
+function addDirectiveCharge(state: MatchState, slot: number, amount: number): void {
+  if (amount <= 0) return;
+  const player = state.players.find((p) => p.slot === slot);
+  if (!player) return;
+  const cap = FACTIONS[player.faction]?.directive.charge_cost ?? 100;
+  player.directiveCharge = Math.min(cap, player.directiveCharge + amount);
+}
+
+function doDirective(state: MatchState, slot: number): ActionResult {
+  const player = state.players.find((p) => p.slot === slot)!;
+  const faction = FACTIONS[player.faction];
+  if (!faction) return fail("unknown_faction");
+  if (player.activeDirective !== null) return fail("directive_already_active");
+  if (player.directiveCharge < faction.directive.charge_cost) {
+    return fail("directive_not_charged");
+  }
+
+  // Every directive lasts a number of turns; the two spellings in the data
+  // (`duration_turns`, and Uplink's `reveal_map_turns`) mean the same thing.
+  const effect = faction.directive.effect;
+  const turns = effect.duration_turns ?? effect.reveal_map_turns ?? 1;
+
+  const next = clone(state);
+  const me = next.players.find((p) => p.slot === slot)!;
+  me.directiveCharge = 0;
+  me.activeDirective = faction.directive.id;
+  me.directiveTurnsLeft = turns;
+  next.version += 1;
+
+  // Vision may have changed this instant - Uplink reveals the map - so the
+  // ownership memory has to be caught up before the view is built.
+  refreshKnownTiles(next);
+
+  return {
+    ok: true,
+    state: next,
+    events: [{
+      type: "directiveActivated", slot, directiveId: faction.directive.id, turns,
+    }],
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /* Transports                                                          */
@@ -600,6 +670,20 @@ function beginTurn(state: MatchState, slot: number): GameEvent[] {
   const player = state.players.find((p) => p.slot === slot);
   if (!player) return [];
 
+  // A directive bought on your turn runs through it and lapses as your next
+  // one opens, which is what makes "1 turn" mean one of *your* turns.
+  const expiries: GameEvent[] = [];
+  if (player.activeDirective !== null) {
+    player.directiveTurnsLeft -= 1;
+    if (player.directiveTurnsLeft <= 0) {
+      expiries.push({
+        type: "directiveEnded", slot, directiveId: player.activeDirective,
+      });
+      player.activeDirective = null;
+      player.directiveTurnsLeft = 0;
+    }
+  }
+
   let income = 0;
   for (const tile of state.map.tiles) {
     if (tile.ownerSlot === slot) income += terrainStats(tile.terrain)?.income ?? 0;
@@ -640,6 +724,7 @@ function beginTurn(state: MatchState, slot: number): GameEvent[] {
   }
 
   events.unshift({ type: "turnStarted", slot, roundNumber: state.roundNumber, income });
+  events.push(...expiries);
   return events;
 }
 

@@ -101,6 +101,7 @@ func _ready() -> void:
 		_board.camera.bottom_inset = _bar.BAR_HEIGHT
 		_bar.capture_pressed.connect(_on_capture_pressed)
 		_bar.unload_pressed.connect(_on_unload_pressed)
+		_bar.directive_pressed.connect(_on_directive_pressed)
 		_bar.wait_pressed.connect(_on_wait_pressed)
 		_bar.cancel_pressed.connect(clear_selection)
 		_bar.end_turn_pressed.connect(_on_end_turn_pressed)
@@ -328,6 +329,24 @@ func _my_faction() -> String:
 ## and a button press means whatever was true before it started.
 func _can_order() -> bool:
 	return _turns.can_act() and not _animating
+
+
+## Whether the local player could fire their Field Directive right now:
+## charged to the full cost, and not already running one.
+func can_fire_directive() -> bool:
+	var current := state()
+	if current == null or not _can_order():
+		return false
+	if not current.active_directive(current.you_slot).is_empty():
+		return false
+	var cost := GameData.directive_cost(current.my_faction())
+	return cost > 0 and current.my_directive_charge() >= cost
+
+
+func _on_directive_pressed() -> void:
+	if not can_fire_directive():
+		return
+	_turns.directive()
 
 
 ## The hold of the selected transport, empty unless one is selected.
@@ -625,4 +644,5 @@ func _refresh_bar() -> void:
 
 	_bar.refresh(status, has_selection and not busy, can_capture_here() and not busy,
 		current != null and current.is_my_turn() and not busy,
-		can_unload_here() and not busy)
+		can_unload_here() and not busy,
+		can_fire_directive() and not busy)

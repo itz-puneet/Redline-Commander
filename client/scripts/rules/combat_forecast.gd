@@ -11,6 +11,12 @@ extends RefCounted
 ##   mitigation = 1 - (terrain defense / 100) x (defenderHP / 100)
 ##   damage     = floor((raw + luck) x mitigation),  luck 0..9
 ##
+## Both modifiers carry the attacker's or defender's running Field Directive
+## (Overdrive, Fortify, Barrage) as well as their faction's passive traits.
+## Leaving those out is the one drift that would be visible to the player
+## rather than merely wrong: they would read a forecast, spend the turn, and
+## be dealt a different number.
+##
 ## Luck is why this reports a RANGE rather than a number: the client cannot
 ## know the roll, and pretending to would be a lie the server then contradicts.
 ## server/test/engine.test.ts pins two exact duels, and hud_check asserts this
@@ -61,7 +67,12 @@ static func can_engage(state: MatchState, attacker: Dictionary, defender: Dictio
 
 	var range_to := absi(int(attacker.get("x", 0)) - int(defender.get("x", 0))) \
 		+ absi(int(attacker.get("y", 0)) - int(defender.get("y", 0)))
-	return range_to >= int(stats.get("min_range", 1)) and range_to <= int(stats.get("max_range", 1))
+	# Barrage extends indirect fire only, exactly as canEngage does.
+	var reach := 0.0
+	if String(stats.get("fire_mode", "")) == "indirect":
+		reach = active_effect(state, int(attacker.get("ownerSlot", 0)), "indirect_range_bonus")
+	return range_to >= int(stats.get("min_range", 1)) \
+		and range_to <= int(stats.get("max_range", 1)) + int(reach)
 
 
 static func _damage(state: MatchState, attacker: Dictionary, defender: Dictionary,
@@ -111,9 +122,27 @@ static func _faction_of(state: MatchState, slot: int) -> Dictionary:
 	return {}
 
 
+## A slot's contribution from its running Field Directive; 0 when none is.
+## Mirrors directiveEffect() in server/src/game/data.ts.
+static func active_effect(state: MatchState, slot: int, key: String) -> float:
+	for player in state.players:
+		if int(player.get("slot", 0)) != slot:
+			continue
+		var active: Variant = player.get("activeDirective")
+		if active == null:
+			return 0.0
+		var directive: Dictionary = _faction_of(state, slot).get("directive", {})
+		if String(directive.get("id", "")) != String(active):
+			return 0.0
+		return float(directive.get("effect", {}).get(key, 0))
+	return 0.0
+
+
 static func _attack_multiplier(state: MatchState, unit: Dictionary) -> float:
-	var modifiers: Dictionary = _faction_of(state, int(unit.get("ownerSlot", 0))).get("modifiers", {})
-	return 1.0 + float(modifiers.get("global_attack_pct", 0)) / 100.0
+	var slot := int(unit.get("ownerSlot", 0))
+	var modifiers: Dictionary = _faction_of(state, slot).get("modifiers", {})
+	var passive := float(modifiers.get("global_attack_pct", 0))
+	return 1.0 + (passive + active_effect(state, slot, "attack_pct")) / 100.0
 
 
 static func _terrain_defense(state: MatchState, unit: Dictionary) -> float:
@@ -124,6 +153,8 @@ static func _terrain_defense(state: MatchState, unit: Dictionary) -> float:
 	if terrain.is_empty():
 		return 0.0
 
-	var modifiers: Dictionary = _faction_of(state, int(unit.get("ownerSlot", 0))).get("modifiers", {})
+	var slot := int(unit.get("ownerSlot", 0))
+	var modifiers: Dictionary = _faction_of(state, slot).get("modifiers", {})
 	var bonus := float(modifiers.get("terrain_defense_bonus_pct", {}).get(terrain_id, 0))
-	return float(terrain.get("defense", 0)) + bonus
+	# Fortify is flat, so it helps in the open - matching terrainDefenseFor.
+	return float(terrain.get("defense", 0)) + bonus + active_effect(state, slot, "defense_pct")

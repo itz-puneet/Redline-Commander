@@ -94,7 +94,16 @@ export interface Player {
   slot: number;
   faction: string;
   funds: number;
+  /** Counts up toward the faction's `charge_cost`; spent to fire a directive. */
   directiveCharge: number;
+  /**
+   * The directive currently in effect for this player, or null. Only ever
+   * this player's own faction's directive - there is one per faction, so the
+   * id doubles as "is something running".
+   */
+  activeDirective: string | null;
+  /** Turns of `activeDirective` left, counted down at this player's upkeep. */
+  directiveTurnsLeft: number;
   /** Set when the player has lost (HQ captured or no units left). */
   defeated: boolean;
   connected: boolean;
@@ -176,6 +185,11 @@ export interface UnloadAction {
   to: Vec2;
 }
 
+/** Spend a full charge on the faction's Field Directive. */
+export interface DirectiveAction {
+  type: "directive";
+}
+
 export interface EndTurnAction {
   type: "endTurn";
 }
@@ -188,6 +202,7 @@ export type Action =
   | WaitAction
   | LoadAction
   | UnloadAction
+  | DirectiveAction
   | EndTurnAction;
 
 /* ------------------------------------------------------------------ */
@@ -228,6 +243,12 @@ export type GameEvent =
     }
   /** `income` is redacted to null for anyone but the player whose turn it is. */
   | { type: "turnStarted"; slot: number; roundNumber: number; income: number | null }
+  | {
+      type: "directiveActivated"; slot: number; directiveId: string;
+      /** Turns it will be in effect for, including the rest of this one. */
+      turns: number;
+    }
+  | { type: "directiveEnded"; slot: number; directiveId: string }
   | { type: "playerDefeated"; slot: number; reason: "hq_captured" | "no_units" }
   | { type: "matchFinished"; winnerSlot: number | null };
 

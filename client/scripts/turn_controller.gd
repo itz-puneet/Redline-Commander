@@ -71,6 +71,11 @@ func build(unit_type: String, at: Vector2i) -> void:
 	_submit({"type": "build", "unitType": unit_type, "at": {"x": at.x, "y": at.y}})
 
 
+## Spend a full charge on the faction's Field Directive.
+func directive() -> void:
+	_submit({"type": "directive"})
+
+
 func end_turn() -> void:
 	_submit({"type": "endTurn"})
 

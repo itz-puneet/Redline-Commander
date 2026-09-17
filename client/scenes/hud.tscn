@@ -55,6 +55,11 @@ text = "0 funds"
 horizontal_alignment = 2
 vertical_alignment = 1
 
+[node name="Directive" type="Label" parent="TopBar/Margin/Row"]
+text = ""
+horizontal_alignment = 2
+vertical_alignment = 1
+
 [node name="UnitInfo" type="PanelContainer" parent="."]
 anchors_preset = 2
 anchor_top = 1.0

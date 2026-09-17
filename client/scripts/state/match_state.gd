@@ -145,6 +145,32 @@ func my_funds() -> int:
 	return 0
 
 
+## This player's record, or {} before the match has seated them.
+func player(slot: int) -> Dictionary:
+	for entry in players:
+		if int(entry.get("slot", 0)) == slot:
+			return entry
+	return {}
+
+
+## The local player's faction id, or "" before they are seated.
+func my_faction() -> String:
+	return String(player(you_slot).get("faction", ""))
+
+
+## How much charge the local player has banked toward their directive.
+func my_directive_charge() -> int:
+	var charge: Variant = player(you_slot).get("directiveCharge")
+	return 0 if charge == null else int(charge)
+
+
+## The directive a slot currently has running, or "" for none. Public for
+## both players: its effects are plain on the board the moment it fires.
+func active_directive(slot: int) -> String:
+	var active: Variant = player(slot).get("activeDirective")
+	return "" if active == null else String(active)
+
+
 ## True once the match is over. `winner_slot` is -1 for a draw.
 func is_finished() -> bool:
 	return phase == "finished"

@@ -55,6 +55,16 @@ func move_cost(terrain_id: String, move_type: String) -> int:
 	return -1 if value == null else int(value)
 
 
+## What a faction's Field Directive costs to fire, or 0 if it has none.
+func directive_cost(faction_id: String) -> int:
+	return int(factions.get(faction_id, {}).get("directive", {}).get("charge_cost", 0))
+
+
+## A faction's Field Directive record: id, display_name, charge_cost, effect.
+func directive_of(faction_id: String) -> Dictionary:
+	return factions.get(faction_id, {}).get("directive", {})
+
+
 ## Base damage percent, attacker type -> defender type. 0 means "cannot engage".
 func base_damage(attacker_type: String, defender_type: String) -> int:
 	return int(damage_matrix.get(attacker_type, {}).get(defender_type, 0))

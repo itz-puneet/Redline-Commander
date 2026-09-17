@@ -24,6 +24,10 @@ vertical_alignment = 1
 custom_minimum_size = Vector2(120, 48)
 text = "Capture"
 
+[node name="Directive" type="Button" parent="Row"]
+custom_minimum_size = Vector2(140, 48)
+text = "Directive"
+
 [node name="Unload" type="Button" parent="Row"]
 custom_minimum_size = Vector2(120, 48)
 text = "Unload"

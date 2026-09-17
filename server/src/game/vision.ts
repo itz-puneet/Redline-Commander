@@ -7,7 +7,7 @@
  * must build a separate, filtered payload per player.
  */
 
-import { FACTIONS, tileAt, unitStats } from "./data";
+import { FACTIONS, directiveEffect, tileAt, unitStats } from "./data";
 import { chebyshev } from "./movement";
 import type { MatchState, Unit } from "./types";
 
@@ -20,17 +20,37 @@ function visionRadius(state: MatchState, unit: Unit): number {
   ];
   const bonus = faction?.modifiers.vision_bonus ?? 0;
 
+  // Blackout is an *enemy* directive that blinds this unit, so it is read
+  // off the other players, not this one.
+  let jamming = 0;
+  for (const other of state.players) {
+    if (other.slot === unit.ownerSlot) continue;
+    jamming = Math.max(
+      jamming, directiveEffect(other.faction, other.activeDirective, "enemy_vision_penalty"));
+  }
+
   // Standing on a capturable building acts as a lookout post.
   const tile = tileAt(state.map, unit.x, unit.y);
   const buildingBonus = tile && tile.ownerSlot === unit.ownerSlot ? 1 : 0;
 
-  return Math.max(1, stats.vision + bonus + buildingBonus);
+  // Never below 1: a blinded unit still sees the tile it is standing on.
+  return Math.max(1, stats.vision + bonus + buildingBonus - jamming);
 }
 
 /** Tile indices (y * width + x) currently visible to `slot`. */
 export function visibleTiles(state: MatchState, slot: number): Set<number> {
   const visible = new Set<number>();
   const { width, height } = state.map;
+
+  // Uplink lifts the fog for its owner. Done here rather than by special-
+  // casing the view, so everything downstream - the payload, event
+  // redaction, what artillery is allowed to shoot at - agrees about what
+  // this player can see, and goes back to agreeing when it lapses.
+  const viewer = state.players.find((p) => p.slot === slot);
+  if (viewer && directiveEffect(viewer.faction, viewer.activeDirective, "reveal_map_turns") > 0) {
+    for (let i = 0; i < state.map.tiles.length; i++) visible.add(i);
+    return visible;
+  }
 
   for (const unit of Object.values(state.units)) {
     if (unit.ownerSlot !== slot) continue;

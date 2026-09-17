@@ -14,7 +14,7 @@ import { reachableTiles, unitAt, validatePath } from "../src/game/movement";
 import { baseDamage, displayHp } from "../src/game/combat";
 import { buildPlayerView, filterEventsFor } from "../src/game/view";
 import { visibleTiles } from "../src/game/vision";
-import { UNITS, TERRAIN, DAMAGE_MATRIX, loadMap } from "../src/game/data";
+import { UNITS, TERRAIN, DAMAGE_MATRIX, FACTIONS, loadMap } from "../src/game/data";
 import type { GameEvent, MatchState, Unit, Vec2 } from "../src/game/types";
 
 function startedMatch(): MatchState {
@@ -506,6 +506,25 @@ test("reference duel into forest cover, for the client's forecast", () => {
   const high = Math.floor(79 * 0.73);
   assert.ok(hit.damage >= low && hit.damage <= high,
     `damage ${hit.damage} outside ${low}..${high}`);
+});
+
+test("reference duel with Overdrive up, for the client's forecast", () => {
+  // The open-road duel again, with slot 1's directive running. Pinned on
+  // both sides: hud_check asserts the client's forecast brackets exactly
+  // this, so neither implementation can pick up the directive term without
+  // the other, which is the failure the player would actually notice -
+  // reading a forecast, spending the turn, being dealt something else.
+  const state = stagedDuel({ x: 7, y: 4 }, { x: 6, y: 4 });
+  state.players[0].activeDirective = "overdrive";
+  state.players[0].directiveTurnsLeft = 1;
+
+  const result = applyAction(state, 1, { type: "attack", unitId: "atk", targetUnitId: "def" });
+  assert.ok(result.ok);
+  const hit = result.events.find((e) => e.type === "unitAttacked");
+  assert.ok(hit && hit.type === "unitAttacked");
+
+  // Base 70 x 1.20 = 84, plus luck(0-9), no terrain mitigation.
+  assert.ok(hit.damage >= 84 && hit.damage <= 93, `damage was ${hit.damage}`);
 });
 
 /* ------------------------------------------------------------------ */
@@ -1237,4 +1256,250 @@ test("a sailing transport takes its cargo's position with it", () => {
       + "the hold dying in the wrong place when the transport is sunk",
   );
   assert.equal(unitAt(sailed.state, shore.x, shore.y), undefined);
+});
+
+/* ------------------------------------------------------------------ */
+/* Field Directives                                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Verified against seven mutations, one per moving part:
+ *   - addDirectiveCharge made a no-op: nothing ever charges
+ *   - the charge_cost gate dropped: a directive fires from empty
+ *   - attackMultiplier ignoring attack_pct: Overdrive changes no damage
+ *   - terrainDefenseFor ignoring defense_pct: Fortify changes no damage
+ *   - canEngage's reach fixed at 0: Barrage does not extend artillery
+ *   - visibleTiles' Uplink branch removed: the map stays dark
+ *   - visionRadius dropping the jamming term: Blackout blinds nobody
+ */
+
+/** A started match whose slot-1 player flies `faction`, fully charged. */
+function chargedMatch(faction: string): MatchState {
+  let state = createMatch({ matchId: "directive", mapId: "crossing", rngSeed: 777 });
+  const p1 = addPlayer(state, "player-one", faction);
+  assert.ok(p1.ok);
+  const p2 = addPlayer(p1.ok ? p1.state : state, "player-two", "crimson_alliance");
+  assert.ok(p2.ok);
+  if (!p2.ok) throw new Error("fixture");
+
+  const ready = structuredClone(p2.state);
+  ready.players[0].directiveCharge = FACTIONS[faction].directive.charge_cost;
+  return ready;
+}
+
+test("a directive needs a full charge, and spends it", () => {
+  const cold = chargedMatch("crimson_alliance");
+  cold.players[0].directiveCharge = 0;
+  const tooSoon = applyAction(cold, 1, { type: "directive" });
+  assert.equal(tooSoon.ok, false);
+  assert.equal(tooSoon.ok === false && tooSoon.reason, "directive_not_charged");
+
+  const ready = chargedMatch("crimson_alliance");
+  const fired = applyAction(ready, 1, { type: "directive" });
+  assert.ok(fired.ok, fired.ok === false ? fired.reason : "");
+  if (!fired.ok) return;
+
+  assert.equal(fired.state.players[0].activeDirective, "overdrive");
+  assert.equal(fired.state.players[0].directiveCharge, 0, "the charge is spent");
+  assert.equal(fired.events.filter((e) => e.type === "directiveActivated").length, 1);
+
+  // Not twice.
+  const again = applyAction(fired.state, 1, { type: "directive" });
+  assert.equal(again.ok, false);
+  assert.equal(again.ok === false && again.reason, "directive_already_active");
+});
+
+test("fighting is what charges a directive, for both sides", () => {
+  const state = chargedMatch("crimson_alliance");
+  state.players[0].directiveCharge = 0;
+  state.players[1].directiveCharge = 0;
+
+  const { state: staged, targetId } = (() => {
+    const s = structuredClone(state);
+    const target = Object.values(s.units).find((u) => u.ownerSlot === 2)!;
+    s.units["gun"] = {
+      id: "gun", unitType: "medium_tank", ownerSlot: 1,
+      x: target.x, y: target.y - 1, hp: 100, fuel: 50, ammo: 8,
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+    };
+    return { state: s, targetId: target.id };
+  })();
+
+  const fought = applyAction(staged, 1, { type: "attack", unitId: "gun", targetUnitId: targetId });
+  assert.ok(fought.ok, fought.ok === false ? fought.reason : "");
+  if (!fought.ok) return;
+
+  assert.ok(fought.state.players[0].directiveCharge > 0, "the attacker charges");
+  assert.ok(
+    fought.state.players[1].directiveCharge > 0,
+    "and so does the player who took the hit - being in the fight is what builds it",
+  );
+});
+
+test("a directive lapses at the start of its owner's next turn", () => {
+  const fired = applyAction(chargedMatch("crimson_alliance"), 1, { type: "directive" });
+  assert.ok(fired.ok);
+  if (!fired.ok) return;
+
+  // Slot 1 ends, slot 2 ends, slot 1 opens again.
+  const toTwo = applyAction(fired.state, 1, { type: "endTurn" });
+  assert.ok(toTwo.ok);
+  if (!toTwo.ok) return;
+  assert.equal(
+    toTwo.state.players[0].activeDirective, "overdrive",
+    "it survives the opponent's turn - one turn means one of yours",
+  );
+
+  const backToOne = applyAction(toTwo.state, 2, { type: "endTurn" });
+  assert.ok(backToOne.ok);
+  if (!backToOne.ok) return;
+  assert.equal(backToOne.state.players[0].activeDirective, null);
+  assert.equal(backToOne.events.filter((e) => e.type === "directiveEnded").length, 1);
+});
+
+/** The same duel fought twice, with and without slot 1's directive up. */
+function duelDamage(faction: string, withDirective: boolean): number {
+  const base = chargedMatch(faction);
+  const target = Object.values(base.units).find((u) => u.ownerSlot === 2)!;
+  const staged = structuredClone(base);
+  staged.units["gun"] = {
+    id: "gun", unitType: "medium_tank", ownerSlot: 1,
+    x: target.x, y: target.y - 1, hp: 100, fuel: 50, ammo: 8,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+
+  let fighting = staged;
+  if (withDirective) {
+    const fired = applyAction(staged, 1, { type: "directive" });
+    assert.ok(fired.ok);
+    if (!fired.ok) throw new Error("fixture");
+    fighting = fired.state;
+  }
+
+  const result = applyAction(fighting, 1, { type: "attack", unitId: "gun", targetUnitId: target.id });
+  assert.ok(result.ok, result.ok === false ? result.reason : "");
+  if (!result.ok) throw new Error("fixture");
+  const hit = result.events.find((e) => e.type === "unitAttacked");
+  return hit && hit.type === "unitAttacked" ? hit.damage : -1;
+}
+
+test("Overdrive makes the same shot hit harder", () => {
+  assert.ok(
+    duelDamage("crimson_alliance", true) > duelDamage("crimson_alliance", false),
+    "attack_pct has to reach the damage formula, not just the player record",
+  );
+});
+
+test("Fortify makes the same shot hit softer", () => {
+  // Verdant Union in slot 1 is the *defender* here, so the counter-attack is
+  // what Fortify should blunt - measured on slot 1's own unit taking damage.
+  const base = chargedMatch("verdant_union");
+  const mine = Object.values(base.units).find((u) => u.ownerSlot === 1)!;
+
+  const staged = structuredClone(base);
+  staged.units["enemy"] = {
+    id: "enemy", unitType: "medium_tank", ownerSlot: 2,
+    x: mine.x, y: mine.y + 1, hp: 100, fuel: 50, ammo: 8,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+  staged.currentSlot = 2;
+
+  const plain = applyAction(staged, 2, { type: "attack", unitId: "enemy", targetUnitId: mine.id });
+  assert.ok(plain.ok, plain.ok === false ? plain.reason : "");
+
+  const guarded = structuredClone(staged);
+  guarded.players[0].activeDirective = "fortify";
+  guarded.players[0].directiveTurnsLeft = 1;
+  const shielded = applyAction(
+    guarded, 2, { type: "attack", unitId: "enemy", targetUnitId: mine.id });
+  assert.ok(shielded.ok, shielded.ok === false ? shielded.reason : "");
+  if (!plain.ok || !shielded.ok) return;
+
+  const dmg = (r: typeof plain) => {
+    const e = r.ok ? r.events.find((x) => x.type === "unitAttacked") : undefined;
+    return e && e.type === "unitAttacked" ? e.damage : -1;
+  };
+  assert.ok(dmg(shielded) < dmg(plain), "defense_pct has to reach the mitigation term");
+});
+
+test("Barrage extends artillery, and nothing else", () => {
+  const state = chargedMatch("azure_federation");
+  const target = Object.values(state.units).find((u) => u.ownerSlot === 2)!;
+
+  const staged = structuredClone(state);
+  // Artillery reaches 3 normally; park it at 4 so only Barrage can connect.
+  staged.units["arty"] = {
+    id: "arty", unitType: "artillery", ownerSlot: 1,
+    x: target.x, y: target.y - 4, hp: 100, fuel: 50, ammo: 9,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+  // A spotter, since artillery cannot see that far itself.
+  staged.units["eyes"] = {
+    id: "eyes", unitType: "infantry", ownerSlot: 1,
+    x: target.x, y: target.y - 1, hp: 100, fuel: 99, ammo: null,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+
+  const short = applyAction(staged, 1, { type: "attack", unitId: "arty", targetUnitId: target.id });
+  assert.equal(short.ok, false, "four tiles is out of reach unaided");
+
+  const fired = applyAction(staged, 1, { type: "directive" });
+  assert.ok(fired.ok);
+  if (!fired.ok) return;
+  const reaching = applyAction(
+    fired.state, 1, { type: "attack", unitId: "arty", targetUnitId: target.id });
+  assert.ok(reaching.ok, reaching.ok === false ? reaching.reason : "");
+
+  // But a tank does not become a sniper.
+  const tankState = structuredClone(fired.state);
+  tankState.units["tank"] = {
+    id: "tank", unitType: "medium_tank", ownerSlot: 1,
+    x: target.x, y: target.y - 2, hp: 100, fuel: 50, ammo: 8,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+  const sniping = applyAction(
+    tankState, 1, { type: "attack", unitId: "tank", targetUnitId: target.id });
+  assert.equal(sniping.ok, false, "indirect_range_bonus must not touch direct fire");
+});
+
+test("Uplink lifts the fog, and only for its owner", () => {
+  const state = chargedMatch("solaris_directorate");
+  const before = visibleTiles(state, 1).size;
+  assert.ok(before < state.map.tiles.length, "fixture assumption: the map starts fogged");
+
+  const fired = applyAction(state, 1, { type: "directive" });
+  assert.ok(fired.ok);
+  if (!fired.ok) return;
+
+  assert.equal(
+    visibleTiles(fired.state, 1).size, fired.state.map.tiles.length,
+    "the whole map is visible to the player who spent the charge",
+  );
+  assert.ok(
+    visibleTiles(fired.state, 2).size < fired.state.map.tiles.length,
+    "and the opponent's fog is untouched",
+  );
+
+  // The view has to agree with vision, or the reveal is cosmetic.
+  const revealed = buildPlayerView(fired.state, 1);
+  assert.equal(revealed.visibleTiles.length, fired.state.map.tiles.length);
+});
+
+test("Blackout blinds the enemy, not its owner", () => {
+  const state = chargedMatch("umbra_syndicate");
+  const theirsBefore = visibleTiles(state, 2).size;
+  const minebefore = visibleTiles(state, 1).size;
+
+  const fired = applyAction(state, 1, { type: "directive" });
+  assert.ok(fired.ok);
+  if (!fired.ok) return;
+
+  assert.ok(
+    visibleTiles(fired.state, 2).size < theirsBefore,
+    "the opponent should see less ground with Blackout running",
+  );
+  assert.equal(
+    visibleTiles(fired.state, 1).size, minebefore,
+    "and the player who fired it sees exactly as much as before",
+  );
 });

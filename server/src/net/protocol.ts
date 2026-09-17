@@ -109,6 +109,7 @@ export function isWellFormedAction(value: unknown): boolean {
         typeof action.unitId === "string" &&
         isVec2(action.to)
       );
+    case "directive":
     case "endTurn":
       return true;
     default:

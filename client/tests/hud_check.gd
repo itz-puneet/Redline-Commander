@@ -24,6 +24,7 @@ var _banner: Node = null
 func _ready() -> void:
 	_check_forecast_matches_the_server()
 	_check_forecast_edges()
+	_check_forecast_includes_directives()
 	await _build_scene()
 	if _controller == null:
 		return
@@ -61,12 +62,34 @@ func _duel_state(defender_tile: Vector2i, attacker_tile: Vector2i) -> MatchState
 	view["units"] = [
 		{"id": "atk", "unitType": "light_tank", "ownerSlot": 1,
 			"x": attacker_tile.x, "y": attacker_tile.y, "hp": 100, "fuel": 70, "ammo": 9,
-			"hasMoved": false, "hasActed": false, "captureProgress": 0, "cargo": []},
+			"hasMoved": false, "hasActed": false, "captureProgress": 0, "cargo": [], "carriedBy": null},
 		{"id": "def", "unitType": "anti_tank_infantry", "ownerSlot": 2,
 			"x": defender_tile.x, "y": defender_tile.y, "hp": 90, "fuel": 70, "ammo": 3,
-			"hasMoved": false, "hasActed": false, "captureProgress": 0, "cargo": []},
+			"hasMoved": false, "hasActed": false, "captureProgress": 0, "cargo": [], "carriedBy": null},
 	]
 	return MatchState.from_view(view)
+
+
+## Reference duel 3: the same open-road fight with Overdrive running.
+##
+## The server pins this at 84..93 in "reference duel with Overdrive up"; if
+## either side picks up the directive term without the other, one of the two
+## goes red. Verified against the mutation of dropping active_effect() from
+## _attack_multiplier, which leaves it predicting 70..79.
+func _check_forecast_includes_directives() -> void:
+	var road := _duel_state(Vector2i(7, 4), Vector2i(6, 4))
+	var plain := CombatForecast.predict(road, road.units["atk"], road.units["def"])
+
+	var boosted := _duel_state(Vector2i(7, 4), Vector2i(6, 4))
+	for player in boosted.players:
+		if int(player.get("slot", 0)) == 1:
+			player["activeDirective"] = "overdrive"
+	var amped := CombatForecast.predict(boosted, boosted.units["atk"], boosted.units["def"])
+
+	_check("Overdrive raises the forecast", int(amped["damage_min"]) > int(plain["damage_min"]))
+	_check("and brackets the server's 84..93",
+		int(amped["damage_min"]) == 84 and int(amped["damage_max"]) == 93,
+		"got %d..%d" % [amped["damage_min"], amped["damage_max"]])
 
 
 func _check_forecast_matches_the_server() -> void:

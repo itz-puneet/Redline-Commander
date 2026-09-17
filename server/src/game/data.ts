@@ -153,3 +153,24 @@ export function tileAt(map: GameMap, x: number, y: number): Tile | undefined {
 export function moveCost(terrainId: string, moveType: MoveType): number | null {
   return TERRAIN[terrainId]?.move_cost[moveType] ?? null;
 }
+
+
+/**
+ * How much a player's *currently active* directive contributes to `key`.
+ *
+ * Zero when nothing is running, when the id does not belong to this
+ * faction, or when this directive has no such effect - so every caller can
+ * add the result unconditionally instead of branching on which faction it
+ * is talking to. Each faction has exactly one directive, so the id is both
+ * "which" and "whether".
+ */
+export function directiveEffect(
+  factionId: string,
+  activeDirective: string | null,
+  key: string,
+): number {
+  if (!activeDirective) return 0;
+  const faction = FACTIONS[factionId];
+  if (!faction || faction.directive.id !== activeDirective) return 0;
+  return faction.directive.effect[key] ?? 0;
+}

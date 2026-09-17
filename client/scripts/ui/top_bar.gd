@@ -8,6 +8,7 @@ extends PanelContainer
 @onready var _turn: Label = $Margin/Row/Turn
 @onready var _round: Label = $Margin/Row/Round
 @onready var _funds: Label = $Margin/Row/Funds
+@onready var _directive: Label = $Margin/Row/Directive
 
 
 func refresh(state: MatchState) -> void:
@@ -15,6 +16,7 @@ func refresh(state: MatchState) -> void:
 		_turn.text = "Connecting..."
 		_round.text = ""
 		_funds.text = ""
+		_directive.text = ""
 		return
 
 	if state.is_finished():
@@ -27,6 +29,7 @@ func refresh(state: MatchState) -> void:
 
 	_round.text = "Round %d" % state.round_number
 	_funds.text = "%d funds" % state.my_funds()
+	_directive.text = _directive_text(state)
 
 	# A dropped opponent is worth saying out loud: in a game where a turn can
 	# arrive hours later, silence and absence look identical.
@@ -35,3 +38,21 @@ func refresh(state: MatchState) -> void:
 				and not bool(player.get("connected", true)):
 			_turn.text = "%s  (opponent offline)" % _turn.text
 			break
+
+
+## Either what is running - yours or theirs, since both are visible - or how
+## close the local player is to being able to fire their own.
+func _directive_text(state: MatchState) -> String:
+	for player in state.players:
+		var slot := int(player.get("slot", 0))
+		var active := state.active_directive(slot)
+		if active.is_empty():
+			continue
+		var name := String(GameData.factions.get(
+			String(player.get("faction", "")), {}).get("directive", {}).get("display_name", active))
+		return "%s: %s" % ["Yours" if slot == state.you_slot else "Enemy", name]
+
+	var cost := GameData.directive_cost(state.my_faction())
+	if cost <= 0:
+		return ""
+	return "Directive %d/%d" % [state.my_directive_charge(), cost]

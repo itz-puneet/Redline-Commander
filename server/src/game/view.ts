@@ -36,6 +36,12 @@ export interface PlayerView {
     /** Only populated for the viewing player - funds are hidden information. */
     funds: number | null;
     directiveCharge: number | null;
+    /**
+     * Public, unlike the charge: a directive's effects are plainly visible
+     * on the board the moment it fires, so hiding the name would only stop
+     * the UI from explaining what the player is already seeing.
+     */
+    activeDirective: string | null;
   }[];
   /** Own units in full; enemy units only where visible, and without hidden fields. */
   units: Partial<Unit>[];
@@ -103,6 +109,7 @@ export function buildPlayerView(state: MatchState, slot: number): PlayerView {
       connected: p.connected,
       funds: p.slot === slot ? p.funds : null,
       directiveCharge: p.slot === slot ? p.directiveCharge : null,
+      activeDirective: p.activeDirective,
     })),
     units,
     visibleTiles: [...visible].sort((a, b) => a - b),

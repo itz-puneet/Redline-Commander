@@ -13,6 +13,7 @@ const BAR_HEIGHT := 72.0
 
 signal capture_pressed()
 signal unload_pressed()
+signal directive_pressed()
 signal wait_pressed()
 signal cancel_pressed()
 signal end_turn_pressed()
@@ -20,6 +21,7 @@ signal end_turn_pressed()
 @onready var _status: Label = $Row/Status
 @onready var _capture: Button = $Row/Capture
 @onready var _unload: Button = $Row/Unload
+@onready var _directive: Button = $Row/Directive
 @onready var _wait: Button = $Row/Wait
 @onready var _cancel: Button = $Row/Cancel
 @onready var _end_turn: Button = $Row/EndTurn
@@ -28,6 +30,7 @@ signal end_turn_pressed()
 func _ready() -> void:
 	_capture.pressed.connect(func(): capture_pressed.emit())
 	_unload.pressed.connect(func(): unload_pressed.emit())
+	_directive.pressed.connect(func(): directive_pressed.emit())
 	_wait.pressed.connect(func(): wait_pressed.emit())
 	_cancel.pressed.connect(func(): cancel_pressed.emit())
 	_end_turn.pressed.connect(func(): end_turn_pressed.emit())
@@ -35,10 +38,14 @@ func _ready() -> void:
 
 ## Called by MatchController after every state change.
 func refresh(status_text: String, has_selection: bool, can_capture: bool,
-		can_end_turn: bool, can_unload: bool = false) -> void:
+		can_end_turn: bool, can_unload: bool = false,
+		can_fire_directive: bool = false) -> void:
 	_status.text = status_text
 	_capture.visible = can_capture
 	_unload.visible = can_unload
+	# Offered only when it is both affordable and not already running, so the
+	# button appearing is itself the news that it is ready.
+	_directive.visible = can_fire_directive
 	_wait.visible = has_selection
 	_cancel.visible = has_selection
 	# Ending the turn mid-selection is a common misfire, so it is offered

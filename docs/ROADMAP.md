@@ -54,7 +54,13 @@ finished models, terrain art, more maps, and a campaign.
       dying, but occupies no tile, sees nothing, and is never sent to an
       opponent. Board by tapping a transport alongside; land with the Unload
       button and a tap on the beach.
-- [ ] Faction Field Directives (in `factions.json`; not wired into the engine)
+- [x] Faction Field Directives. Both sides charge from damage dealt and
+      taken, one point per HP pip, and a full 100 fires the faction's power
+      for one of its owner's turns: Overdrive (+20% attack), Barrage
+      (indirect range +1), Fortify (+20% defense), Uplink (the map, for a
+      turn), Blackout (enemy vision -1). Uplink and Blackout go through
+      `visibleTiles`, so the payload, event redaction and what artillery may
+      shoot at all agree about the change and all agree again when it lapses.
 
 ## Phase 4 — Content (next up)
 

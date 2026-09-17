@@ -62,6 +62,7 @@ eventually wants real accounts.
 { "type": "capture", "unitId": "u1" }
 { "type": "build",   "unitType": "light_tank", "at": {"x":2,"y":0} }
 { "type": "wait",    "unitId": "u1" }
+{ "type": "directive" }
 { "type": "load",    "unitId": "u1", "transportId": "u9" }
 { "type": "unload",  "transportId": "u9", "unitId": "u1", "to": {"x":4,"y":7} }
 { "type": "endTurn" }
@@ -108,6 +109,8 @@ Built per player by `server/src/game/view.ts`:
 - **Enemy units** only where visible, and stripped of `fuel`, `ammo` and
   `cargo` — a player cannot observe those.
 - **Own funds and directive charge** only; the opponent's read `null`.
+  `activeDirective` is public for both - a directive's effects are plain on
+  the board the moment it fires.
 - `visibleTiles` as a list of tile indices (`y * width + x`).
 - Terrain is public; **tile ownership is what this player has seen**, not the
   live grid — a building changing hands in the dark would otherwise pinpoint
@@ -163,6 +166,7 @@ path_blocked_by_enemy      insufficient_movement      destination_occupied
 unit_cannot_capture        tile_not_capturable        tile_already_yours
 tile_does_not_build        tile_not_yours             wrong_production_building
 tile_occupied              insufficient_funds
+directive_not_charged      directive_already_active   unknown_faction
 unit_already_loaded        no_such_transport          cannot_load_into_itself
 transport_is_loaded        unit_cannot_carry          transport_full
 wrong_cargo_type           transport_not_adjacent     not_in_this_transport

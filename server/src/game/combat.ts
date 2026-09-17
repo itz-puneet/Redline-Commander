@@ -5,9 +5,10 @@
  * the authoritative result cannot drift:
  *
  *   base       = damage_matrix[attackerType][defenderType]        (percent)
- *   attackMod  = 1 + faction global_attack_pct/100
+ *   attackMod  = 1 + (faction global_attack_pct + directive attack_pct)/100
  *   raw        = base * attackMod * (attackerHp / 100)
- *   terrainDef = terrain.defense + faction terrain bonus          (percent)
+ *   terrainDef = terrain.defense + faction terrain bonus
+ *                + directive defense_pct                          (percent)
  *   mitigation = 1 - (terrainDef / 100) * (defenderHp / 100)
  *   luck       = integer 0..9, from the match's seeded RNG (server only)
  *   damage     = floor((raw + luck) * mitigation)
@@ -16,12 +17,20 @@
  * unit gets little benefit from cover. Luck is added before mitigation so
  * cover dampens lucky rolls too.
  *
+ * The directive terms are zero unless that player has a Field Directive
+ * running this turn (see doDirective in engine.ts). They are part of the
+ * formula rather than a special case on top of it, because the client's
+ * forecast mirrors this and the two must not disagree about a number the
+ * player is shown before committing.
+ *
  * A defender that survives a DIRECT attack counters, using the same formula
  * with roles swapped and its own post-damage HP, but with no luck roll.
  * Indirect-fire units neither counter nor are countered.
  */
 
-import { DAMAGE_MATRIX, FACTIONS, terrainStats, tileAt, unitStats } from "./data";
+import {
+  DAMAGE_MATRIX, FACTIONS, directiveEffect, terrainStats, tileAt, unitStats,
+} from "./data";
 import { manhattan } from "./movement";
 import { rollInt } from "./rng";
 import type { MatchState, Unit } from "./types";
@@ -36,12 +45,24 @@ export function canEngage(state: MatchState, attacker: Unit, defender: Unit): bo
   if (stats.max_ammo !== null && attacker.ammo !== null && attacker.ammo <= 0) return false;
   if (baseDamage(attacker.unitType, defender.unitType) <= 0) return false;
 
+  // Barrage extends indirect fire only - it is an artillery order, and on a
+  // direct-fire unit it would silently turn tanks into snipers.
+  const reach = stats.fire_mode === "indirect"
+    ? activeEffect(state, attacker.ownerSlot, "indirect_range_bonus")
+    : 0;
   const range = manhattan(attacker, defender);
-  return range >= stats.min_range && range <= stats.max_range;
+  return range >= stats.min_range && range <= stats.max_range + reach;
 }
 
 function factionOf(state: MatchState, slot: number): string {
   return state.players.find((p) => p.slot === slot)?.faction ?? "crimson_alliance";
+}
+
+/** A slot's contribution from its running directive, 0 when none is. */
+export function activeEffect(state: MatchState, slot: number, key: string): number {
+  const player = state.players.find((p) => p.slot === slot);
+  if (!player) return 0;
+  return directiveEffect(player.faction, player.activeDirective, key);
 }
 
 function terrainDefenseFor(state: MatchState, unit: Unit): number {
@@ -51,12 +72,15 @@ function terrainDefenseFor(state: MatchState, unit: Unit): number {
 
   const faction = FACTIONS[factionOf(state, unit.ownerSlot)];
   const bonus = faction?.modifiers.terrain_defense_bonus_pct?.[tile.terrain] ?? 0;
-  return terrain.defense + bonus;
+  // Fortify adds flat defence wherever the unit is standing, so it helps in
+  // the open - which is the point of it.
+  return terrain.defense + bonus + activeEffect(state, unit.ownerSlot, "defense_pct");
 }
 
 function attackMultiplier(state: MatchState, unit: Unit): number {
   const faction = FACTIONS[factionOf(state, unit.ownerSlot)];
-  return 1 + (faction?.modifiers.global_attack_pct ?? 0) / 100;
+  const passive = faction?.modifiers.global_attack_pct ?? 0;
+  return 1 + (passive + activeEffect(state, unit.ownerSlot, "attack_pct")) / 100;
 }
 
 function computeDamage(

@@ -52,9 +52,9 @@ static func match_view(reveal_all: bool = false, map_id: String = "crossing") ->
 		},
 		"players": [
 			{"slot": 1, "faction": "crimson_alliance", "defeated": false, "connected": true,
-				"funds": 5000, "directiveCharge": 40},
+				"funds": 5000, "directiveCharge": 40, "activeDirective": null},
 			{"slot": 2, "faction": "azure_federation", "defeated": false, "connected": true,
-				"funds": null, "directiveCharge": null},
+				"funds": null, "directiveCharge": null, "activeDirective": null},
 		],
 		"units": units,
 		"visibleTiles": visible,
