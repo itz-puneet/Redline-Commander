@@ -115,8 +115,9 @@ layout of the code, so keep them that way.
    E=2, S=4, W=8) and asks the sheet for `road:0@NS` before falling back to
    `road:0`. For a road a side connects when it continues the network; for
    shallow water a side is set when it is *land*, which is what points the
-   sand at the coast. The variant art does not exist yet, so every lookup
-   currently falls back - see `art/png/README.md` for the exact list. Never
+   sand at the coast. All 20 variants the two shipped maps ask for now
+   exist, so lookups resolve rather than fall back - see `art/png/README.md`.
+   A new map can still ask for a neighbourhood nothing has drawn, so never
    make the fallback an error: a missing variant is a shoreline that does
    not know which way the land is, not a hole in the map.
 
@@ -162,7 +163,10 @@ layout of the code, so keep them that way.
 Playable end to end: connect, create or join a match by code, and fight it
 out - board, fog, touch input, animated moves and combat, production, and a HUD
 with a damage forecast, all validated by the server and verified against a
-real one by `tools/live-check.sh`.
+real one by `tools/live-check.sh`. Every rule the data describes is now
+implemented: transports carry and land cargo, and each faction's Field
+Directive charges from combat and fires. `Hotseat on this device` in the
+lobby seats one person in both slots for pass-and-play.
 
 Units, terrain and buildings are real artwork - see rule 8. Selection/range
 overlays, the capture bar, combat VFX and faction emblems are cropped and

@@ -268,10 +268,12 @@ func _check_real_terrain_art() -> void:
 
 
 ## The connectivity mask, which is where the shoreline and the road network
-## actually get decided. Tested directly rather than through the render,
-## because no variant art exists yet - every lookup currently falls back to
-## the plain tile, so a render-level assertion would pass with the mask
-## computed entirely wrong.
+## actually get decided. Tested directly rather than through the render:
+## the mask is a pure function of the neighbours, and asserting it here
+## pins the rule itself rather than whichever tile happens to be drawn for
+## it. (When this was written no variant art existed at all, so a
+## render-level assertion would have passed with the mask computed entirely
+## wrong. All 20 now ship, but the reason to test the rule directly stands.)
 ##
 ## Verified against three mutations, one per group below:
 ##   - _connects() returning false for "road": every road mask goes to 0
