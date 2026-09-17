@@ -40,6 +40,7 @@ func _ready() -> void:
 	_check_capture_availability()
 	_check_post_move_state()
 	_check_stale_selection_dropped()
+	_check_transport()
 
 	if _failures == 0:
 		print("\ninput_check: all checks passed")
@@ -272,3 +273,157 @@ func _check_stale_selection_dropped() -> void:
 	_controller.load_view(spent)
 	_check("a selection is dropped once the unit has acted",
 		_controller.selected_unit_id().is_empty())
+
+
+## --- transports --------------------------------------------------------
+##
+## Verified against three mutations:
+##   - MatchState.is_carried always false: the carried infantry reappears on
+##     the board and "a boarded unit leaves the board" fails
+##   - TransportRules.can_load dropping its adjacency test: boarding from
+##     three tiles away is offered, and the "alongside" check fails
+##   - the unload branch in tap_tile removed: the landing tap falls through
+##     to ordinary movement and no unload action is ever sent
+
+## A transport afloat with an infantry on the beach beside it, on `straits`.
+## The tiles are searched for rather than hardcoded so a later edit to the
+## map cannot turn this into a test of an empty ocean.
+func _beachhead_view() -> Dictionary:
+	var view := Fixtures.match_view(true, "straits")
+	var map: Dictionary = view["map"]
+	var width := int(map["width"])
+	var height := int(map["height"])
+	var terrain: Array = map["terrain"]
+
+	for y in range(1, height - 1):
+		for x in range(1, width - 1):
+			if GameData.move_cost(String(terrain[y * width + x]), "sea") < 0:
+				continue
+			for step in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var sx: int = x + step.x
+				var sy: int = y + step.y
+				if GameData.move_cost(String(terrain[sy * width + sx]), "foot") < 0:
+					continue
+				view["units"] = [
+					{
+						"id": "ship", "unitType": "transport_ship", "ownerSlot": 1,
+						"x": x, "y": y, "hp": 100, "fuel": 99, "ammo": null,
+						"hasMoved": false, "hasActed": false, "captureProgress": 0,
+						"cargo": [], "carriedBy": null,
+					},
+					{
+						"id": "grunt", "unitType": "infantry", "ownerSlot": 1,
+						"x": sx, "y": sy, "hp": 100, "fuel": 99, "ammo": null,
+						"hasMoved": false, "hasActed": false, "captureProgress": 0,
+						"cargo": [], "carriedBy": null,
+					},
+				]
+				view["_ship"] = Vector2i(x, y)
+				view["_shore"] = Vector2i(sx, sy)
+				return view
+	return {}
+
+
+func _check_transport() -> void:
+	var view := _beachhead_view()
+	if view.is_empty():
+		_check("straits has open water beside passable land", false)
+		return
+
+	var ship: Vector2i = view["_ship"]
+	var shore: Vector2i = view["_shore"]
+	_reset(view)
+
+	# Boarding: select the infantry, tap the transport alongside.
+	_controller.tap_tile(shore)
+	_check("the infantry on the beach selects", _controller.selected_unit_id() == "grunt")
+	_controller.tap_tile(ship)
+	_check("tapping the transport alongside boards it",
+		_last().get("type", "") == "load", "sent %s" % _last())
+	_check("and names both the passenger and the hull",
+		_last().get("unitId", "") == "grunt" and _last().get("transportId", "") == "ship")
+
+	# Once loaded, the passenger is off the board entirely.
+	var loaded := _beachhead_view()
+	for unit in loaded["units"]:
+		if String(unit["id"]) == "grunt":
+			unit["carriedBy"] = "ship"
+			unit["x"] = ship.x
+			unit["y"] = ship.y
+		else:
+			unit["cargo"] = ["grunt"]
+	_reset(loaded)
+
+	var board: Board = _match.get_node("Board")
+	_check("a boarded unit leaves the board",
+		board.unit_node("grunt") == null, "still drawn")
+	_check("and its transport's tile still answers with the transport",
+		String(_controller.state().unit_at(ship.x, ship.y).get("id", "")) == "ship")
+	_check("the beach it left is empty",
+		_controller.state().unit_at(shore.x, shore.y).is_empty())
+
+	# Landing: select the transport, press Unload, tap the beach.
+	_controller.tap_tile(ship)
+	_check("the loaded transport selects", _controller.selected_unit_id() == "ship")
+	_check("and offers to put its hold ashore", _controller.can_unload_here())
+	_check("which is one passenger", _controller.selected_cargo().size() == 1)
+
+	_sent.clear()
+	_controller._on_unload_pressed()
+	_check("arming a landing highlights the beach",
+		_controller.landing_tiles().has(shore),
+		"%d tiles offered" % _controller.landing_tiles().size())
+	_check("and sends nothing on its own", _sent.is_empty())
+
+	_controller.tap_tile(shore)
+	_check("tapping the beach lands the passenger there",
+		_last().get("type", "") == "unload", "sent %s" % _last())
+	_check("naming the hull, the passenger and the tile",
+		_last().get("transportId", "") == "ship"
+		and _last().get("unitId", "") == "grunt"
+		and _last().get("to", {}) == {"x": shore.x, "y": shore.y})
+
+	# An empty transport has nothing to offer.
+	_reset(view)
+	_controller.tap_tile(ship)
+	_check("an empty transport offers no landing", not _controller.can_unload_here())
+
+	# You cannot board from across the bay. Without this the adjacency rule
+	# in TransportRules.can_load is never exercised, and can be deleted with
+	# every other check here still green.
+	var distant := _beachhead_view()
+	var far := _land_tile_away_from(distant, ship, 2)
+	if far == Vector2i(-1, -1):
+		_check("straits has open ground away from the water", false)
+		return
+	for unit in distant["units"]:
+		if String(unit["id"]) == "grunt":
+			unit["x"] = far.x
+			unit["y"] = far.y
+	_reset(distant)
+
+	_controller.tap_tile(far)
+	_check("the infantry inland selects", _controller.selected_unit_id() == "grunt")
+	_controller.tap_tile(ship)
+	_check("but tapping a transport it is not alongside boards nothing",
+		_last().get("type", "") != "load", "sent %s" % _last())
+
+
+## A foot-passable, unoccupied tile at least `gap` tiles from `origin`.
+func _land_tile_away_from(view: Dictionary, origin: Vector2i, gap: int) -> Vector2i:
+	var map: Dictionary = view["map"]
+	var width := int(map["width"])
+	var terrain: Array = map["terrain"]
+	for y in range(int(map["height"])):
+		for x in range(width):
+			if absi(x - origin.x) + absi(y - origin.y) < gap:
+				continue
+			if GameData.move_cost(String(terrain[y * width + x]), "foot") < 0:
+				continue
+			var taken := false
+			for unit in view["units"]:
+				if int(unit["x"]) == x and int(unit["y"]) == y:
+					taken = true
+			if not taken:
+				return Vector2i(x, y)
+	return Vector2i(-1, -1)

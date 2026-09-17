@@ -62,12 +62,20 @@ eventually wants real accounts.
 { "type": "capture", "unitId": "u1" }
 { "type": "build",   "unitType": "light_tank", "at": {"x":2,"y":0} }
 { "type": "wait",    "unitId": "u1" }
+{ "type": "load",    "unitId": "u1", "transportId": "u9" }
+{ "type": "unload",  "transportId": "u9", "unitId": "u1", "to": {"x":4,"y":7} }
 { "type": "endTurn" }
 ```
 
 `path` excludes the origin tile and must be contiguous. The server re-walks
 it step by step; the client's own idea of the cost is never trusted, and a
 malformed action is rejected at the transport before it reaches the rules.
+
+`load` moves the passenger aboard from an adjacent tile and costs it its
+turn. It cannot be done with a `move`: a loaded tile is occupied like any
+other, so boarding is what crosses that last tile. `unload` puts one unit
+from the hold onto an adjacent passable tile; the transport may empty the
+rest of its hold in the same turn, but has committed its position.
 
 A move that walks into a unit the player cannot see **succeeds**, stopping
 the unit short — the `unitMoved` event reports where it actually ended.
@@ -112,7 +120,10 @@ carry more than the view does:
   into fog ends there.
 - `turnStarted` carries `income` only for the player whose turn it is —
   income is their building count, and their hidden funds follow from it.
-- Builds and captures out of sight are not announced.
+- Builds, captures and landings out of sight are not announced.
+- **Cargo is never sent to an opponent at all.** A loaded unit keeps its
+  transport's coordinates, so the ordinary "is this tile visible" test would
+  otherwise hand over the whole manifest of any transport in sight.
 - Only defeats and the end of the match are public.
 
 ## Rate limiting
@@ -152,6 +163,10 @@ path_blocked_by_enemy      insufficient_movement      destination_occupied
 unit_cannot_capture        tile_not_capturable        tile_already_yours
 tile_does_not_build        tile_not_yours             wrong_production_building
 tile_occupied              insufficient_funds
+unit_already_loaded        no_such_transport          cannot_load_into_itself
+transport_is_loaded        unit_cannot_carry          transport_full
+wrong_cargo_type           transport_not_adjacent     not_in_this_transport
+not_adjacent               out_of_bounds
 match_not_started          match_finished             player_defeated
 no_such_match              not_in_this_match          match_full
 already_authenticated      rate_limited               insecure_transport

@@ -52,6 +52,9 @@ var _move_range: Dictionary = {}       ## Vector2i -> cost
 var _attack_targets: Array = []        ## Vector2i
 ## The target a confirming tap would hit. Empty means nothing is armed.
 var _armed_target_id: String = ""
+## The passenger waiting for the player to pick a beach, while a transport is
+## selected and Unload has been pressed. Empty when not unloading.
+var _unload_pending_id: String = ""
 var _animating := false
 ## Bumped on every settle, so a run that is overtaken by a newer update knows
 ## to stand down rather than clearing the flag and redrawing mid-tween.
@@ -97,6 +100,7 @@ func _ready() -> void:
 		# match does not tuck the bottom row of the map behind the bar.
 		_board.camera.bottom_inset = _bar.BAR_HEIGHT
 		_bar.capture_pressed.connect(_on_capture_pressed)
+		_bar.unload_pressed.connect(_on_unload_pressed)
 		_bar.wait_pressed.connect(_on_wait_pressed)
 		_bar.cancel_pressed.connect(clear_selection)
 		_bar.end_turn_pressed.connect(_on_end_turn_pressed)
@@ -179,11 +183,29 @@ func tap_tile(tile: Vector2i) -> void:
 
 	var tapped: Dictionary = current.unit_at(tile.x, tile.y)
 
+	# A landing is armed: this tap either names the beach or calls it off.
+	if not _unload_pending_id.is_empty():
+		if landing_tiles().has(tile):
+			_turns.unload_unit(_selected_id, _unload_pending_id, tile)
+			_unload_pending_id = ""
+		else:
+			_cancel_unload()
+		return
+
 	if _selected_id.is_empty():
 		if not tapped.is_empty() and _can_command(String(tapped.get("id", ""))):
 			_set_selection(String(tapped["id"]))
 		elif tapped.is_empty() and can_build_at(tile):
 			_open_build_menu(tile)
+		return
+
+	# A friendly transport alongside is a berth, not an obstacle. Checked
+	# before the attack overlay because a transport is never a target for
+	# its own side, so the two can never both apply.
+	if not tapped.is_empty() and TransportRules.can_load(
+			current, current.units.get(_selected_id, {}), tapped):
+		_disarm()
+		_turns.load_unit(_selected_id, String(tapped.get("id", "")))
 		return
 
 	# An enemy under the attack overlay is a target, and takes priority: a
@@ -308,6 +330,63 @@ func _can_order() -> bool:
 	return _turns.can_act() and not _animating
 
 
+## The hold of the selected transport, empty unless one is selected.
+func selected_cargo() -> Array[Dictionary]:
+	var current := state()
+	if current == null or _selected_id.is_empty():
+		return [] as Array[Dictionary]
+	return current.cargo_of(_selected_id)
+
+
+## The tiles a pending landing may use. Empty unless Unload is armed.
+##
+## Deliberately not folded into movement_range(): these are the transport's
+## neighbours, not the selected unit's reachable set, and a tap on one means
+## "put the passenger here", not "move there".
+func landing_tiles() -> Array[Vector2i]:
+	var current := state()
+	if current == null or _unload_pending_id.is_empty() or _selected_id.is_empty():
+		return [] as Array[Vector2i]
+	return TransportRules.unload_tiles(
+		current, current.units.get(_selected_id, {}),
+		current.units.get(_unload_pending_id, {}))
+
+
+## Whether the selected unit is a transport with something aboard to land.
+func can_unload_here() -> bool:
+	if not _can_order():
+		return false
+	var cargo := selected_cargo()
+	if cargo.is_empty():
+		return false
+	var current := state()
+	# Somewhere to put it: a full hold beside a cliff has nothing to offer.
+	return not TransportRules.unload_tiles(
+		current, current.units.get(_selected_id, {}), cargo[0]).is_empty()
+
+
+## Arms the landing: the next tap on a highlighted tile puts the first
+## passenger ashore there. Pressed again with a second passenger aboard, it
+## arms that one - the hold empties one unit and one tap at a time, which is
+## also how the server takes it.
+func _on_unload_pressed() -> void:
+	var cargo := selected_cargo()
+	if cargo.is_empty() or not _can_order():
+		return
+
+	_disarm()
+	_unload_pending_id = String(cargo[0].get("id", ""))
+	_recompute_overlays()
+	_refresh_bar()
+
+
+func _cancel_unload() -> void:
+	if _unload_pending_id.is_empty():
+		return
+	_unload_pending_id = ""
+	_recompute_overlays()
+
+
 func _on_capture_pressed() -> void:
 	if _selected_id.is_empty() or not _can_order():
 		return
@@ -408,8 +487,10 @@ func _can_command(unit_id: String) -> bool:
 
 func _set_selection(unit_id: String) -> void:
 	_selected_id = unit_id
-	# A target armed for the previous unit means nothing for this one.
+	# A target armed for the previous unit means nothing for this one, and
+	# neither does a landing that was waiting on a beach for it.
 	_armed_target_id = ""
+	_unload_pending_id = ""
 	_recompute_overlays()
 	_refresh_hud()
 	_refresh_bar()
@@ -427,6 +508,14 @@ func _recompute_overlays() -> void:
 
 	var unit: Dictionary = current.units.get(_selected_id, {})
 	if unit.is_empty():
+		return
+
+	# A landing takes over the board: the only tiles that mean anything are
+	# the ones the passenger can be put down on, so the movement and attack
+	# ranges stay dark rather than offering orders the tap will not give.
+	if not _unload_pending_id.is_empty():
+		_board.show_movement_range(landing_tiles())
+		_board.show_selection(Vector2i(int(unit.get("x", 0)), int(unit.get("y", 0))))
 		return
 
 	# A unit that has already moved keeps its attack options but has no
@@ -523,6 +612,8 @@ func _refresh_bar() -> void:
 			status = "Sending..."
 		elif not current.is_my_turn():
 			status = "Opponent's turn"
+		elif not _unload_pending_id.is_empty():
+			status = "Tap a highlighted tile to land"
 		elif not _armed_target_id.is_empty():
 			status = "Tap the target again to attack"
 		elif has_selection:
@@ -533,4 +624,5 @@ func _refresh_bar() -> void:
 			status = "Round %d - your turn (%d funds)" % [current.round_number, current.my_funds()]
 
 	_bar.refresh(status, has_selection and not busy, can_capture_here() and not busy,
-		current != null and current.is_my_turn() and not busy)
+		current != null and current.is_my_turn() and not busy,
+		can_unload_here() and not busy)

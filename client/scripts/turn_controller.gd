@@ -56,6 +56,17 @@ func wait_unit(unit_id: String) -> void:
 	_submit({"type": "wait", "unitId": unit_id})
 
 
+func load_unit(unit_id: String, transport_id: String) -> void:
+	_submit({"type": "load", "unitId": unit_id, "transportId": transport_id})
+
+
+func unload_unit(transport_id: String, unit_id: String, to: Vector2i) -> void:
+	_submit({
+		"type": "unload", "transportId": transport_id, "unitId": unit_id,
+		"to": {"x": to.x, "y": to.y},
+	})
+
+
 func build(unit_type: String, at: Vector2i) -> void:
 	_submit({"type": "build", "unitType": unit_type, "at": {"x": at.x, "y": at.y}})
 

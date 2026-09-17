@@ -111,11 +111,15 @@ func _terrain_tile_key(x: int, y: int, terrain_id: String) -> String:
 ## throw away any in-flight animation on a unit that merely moved.
 func _render_units() -> void:
 	for unit_id in _unit_nodes.keys():
-		if not state.units.has(unit_id):
+		# A unit that boarded a transport is still in the state - it is just
+		# no longer on the board, so its node goes with the ones that died.
+		if not state.units.has(unit_id) or MatchState.is_carried(state.units[unit_id]):
 			(_unit_nodes[unit_id] as Node).queue_free()
 			_unit_nodes.erase(unit_id)
 
 	for unit_id in state.units:
+		if MatchState.is_carried(state.units[unit_id]):
+			continue
 		var node: Unit = _unit_nodes.get(unit_id)
 		if node == null:
 			node = Unit.new()

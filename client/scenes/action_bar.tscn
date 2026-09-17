@@ -24,6 +24,10 @@ vertical_alignment = 1
 custom_minimum_size = Vector2(120, 48)
 text = "Capture"
 
+[node name="Unload" type="Button" parent="Row"]
+custom_minimum_size = Vector2(120, 48)
+text = "Unload"
+
 [node name="Wait" type="Button" parent="Row"]
 custom_minimum_size = Vector2(100, 48)
 text = "Wait"

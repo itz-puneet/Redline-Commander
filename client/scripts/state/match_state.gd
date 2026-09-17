@@ -95,11 +95,34 @@ func is_visible(x: int, y: int) -> bool:
 	return in_bounds(x, y) and visible_tiles.has(tile_index(x, y))
 
 
+## True for a unit riding inside a transport.
+##
+## The server sends your own cargo with its transport's coordinates, so
+## every "what is standing here" question has to exclude it or a loaded
+## transport answers with its passengers. Enemy cargo is never sent at all.
+static func is_carried(unit: Dictionary) -> bool:
+	return unit.get("carriedBy") != null
+
+
 func unit_at(x: int, y: int) -> Dictionary:
 	for unit in units.values():
+		if MatchState.is_carried(unit):
+			continue
 		if int(unit.get("x", -1)) == x and int(unit.get("y", -1)) == y:
 			return unit
 	return {}
+
+
+## The cargo manifest of a transport, in load order. Empty for anything that
+## is not carrying, and for an enemy transport whose hold is not our business.
+func cargo_of(unit_id: String) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var carrier: Dictionary = units.get(unit_id, {})
+	for carried_id in carrier.get("cargo", []):
+		var carried: Dictionary = units.get(String(carried_id), {})
+		if not carried.is_empty():
+			result.append(carried)
+	return result
 
 
 func units_of(slot: int) -> Array[Dictionary]:

@@ -49,7 +49,11 @@ finished models, terrain art, more maps, and a campaign.
 - [x] Lobby screen: connect, create match, share code, join by code, rejoin
 - [x] End-to-end check against a real server (`tools/live-check.sh`)
 - [ ] Hotseat mode on one device (useful for testing without two phones)
-- [ ] Transport load/unload actions (data and state exist; engine does not)
+- [x] Transport load/unload actions. Cargo is off the board: it keeps its
+      transport's coordinates so a sinking has somewhere to report the hold
+      dying, but occupies no tile, sees nothing, and is never sent to an
+      opponent. Board by tapping a transport alongside; land with the Unload
+      button and a tap on the beach.
 - [ ] Faction Field Directives (in `factions.json`; not wired into the engine)
 
 ## Phase 4 — Content (next up)
