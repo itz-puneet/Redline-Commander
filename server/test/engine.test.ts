@@ -10,12 +10,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { addPlayer, applyAction, createMatch } from "../src/game/engine";
-import { reachableTiles, validatePath } from "../src/game/movement";
+import { reachableTiles, unitAt, validatePath } from "../src/game/movement";
 import { baseDamage, displayHp } from "../src/game/combat";
 import { buildPlayerView, filterEventsFor } from "../src/game/view";
 import { visibleTiles } from "../src/game/vision";
 import { UNITS, TERRAIN, DAMAGE_MATRIX, loadMap } from "../src/game/data";
-import type { MatchState, Unit } from "../src/game/types";
+import type { GameEvent, MatchState, Unit, Vec2 } from "../src/game/types";
 
 function startedMatch(): MatchState {
   let state = createMatch({ matchId: "test", mapId: "crossing", rngSeed: 12345 });
@@ -209,13 +209,13 @@ function spottedArtillery(): { state: MatchState; targetId: string } {
   state.units["arty"] = {
     id: "arty", unitType: "artillery", ownerSlot: 1,
     x: target.x, y: target.y - 2, hp: 100, fuel: 50, ammo: 9,
-    hasMoved: true, hasActed: false, captureProgress: 0, cargo: [],
+    hasMoved: true, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
   };
   // Artillery has vision 1 and range 2-3, so it cannot see what it shoots.
   state.units["eyes"] = {
     id: "eyes", unitType: "infantry", ownerSlot: 1,
     x: target.x, y: target.y - 1, hp: 100, fuel: 99, ammo: null,
-    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
   };
   return { state, targetId: target.id };
 }
@@ -464,12 +464,12 @@ function stagedDuel(defenderAt: { x: number; y: number }, attackerAt: { x: numbe
     atk: {
       id: "atk", unitType: "light_tank", ownerSlot: 1,
       x: attackerAt.x, y: attackerAt.y, hp: 100, fuel: 70, ammo: 9,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
     def: {
       id: "def", unitType: "anti_tank_infantry", ownerSlot: 2,
       x: defenderAt.x, y: defenderAt.y, hp: 90, fuel: 70, ammo: 3,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
   };
   return state;
@@ -625,12 +625,12 @@ function contactState(): MatchState {
     mine: {
       id: "mine", unitType: "light_tank", ownerSlot: 1, x: 6, y: 4,
       hp: 100, fuel: 70, ammo: 9,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
     theirs: {
       id: "theirs", unitType: "anti_tank_infantry", ownerSlot: 2, x: 7, y: 4,
       hp: 20, fuel: 70, ammo: 3,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
   };
   return state;
@@ -682,12 +682,12 @@ test("an enemy move is reported only as far as it was watched", () => {
     watcher: {
       id: "watcher", unitType: "infantry", ownerSlot: 1, x: 6, y: 4,
       hp: 100, fuel: 99, ammo: null,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
     runner: {
       id: "runner", unitType: "recon", ownerSlot: 2, x: 7, y: 4,
       hp: 100, fuel: 80, ammo: null,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
   };
   state.currentSlot = 2;
@@ -762,12 +762,12 @@ test("walking into something unseen stops the unit instead of refusing the order
     mover: {
       id: "mover", unitType: "light_tank", ownerSlot: 1, x: 4, y: 4,
       hp: 100, fuel: 70, ammo: 9,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
     hidden: {
       id: "hidden", unitType: "infantry", ownerSlot: 2, x: 9, y: 4,
       hp: 100, fuel: 99, ammo: null,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
   };
 
@@ -794,12 +794,12 @@ test("a visible enemy still blocks a path outright", () => {
     mover: {
       id: "mover", unitType: "recon", ownerSlot: 1, x: 6, y: 4,
       hp: 100, fuel: 80, ammo: null,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
     blocker: {
       id: "blocker", unitType: "infantry", ownerSlot: 2, x: 7, y: 4,
       hp: 100, fuel: 99, ammo: null,
-      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+      hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
     },
   };
 
@@ -894,7 +894,7 @@ function placeBoat(state: MatchState, x: number, y: number): Unit {
   const boat: Unit = {
     id: "boat-1", unitType: "patrol_boat", ownerSlot: 1, x, y,
     hp: 100, fuel: UNITS.patrol_boat.max_fuel, ammo: UNITS.patrol_boat.max_ammo,
-    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [],
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
   };
   state.units[boat.id] = boat;
   return boat;
@@ -959,4 +959,282 @@ test("a path through a reef is rejected, one around it is accepted", () => {
   assert.ok(open, "the reef should have navigable water beside it to steer into");
   assert.equal(validatePath(state, boat, [open]).ok, true,
     "a step into open water beside the reef must be allowed");
+});
+
+/* ------------------------------------------------------------------ */
+/* Transports                                                          */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Verified against five mutations, one per guard these rest on:
+ *   - unitAt dropping its `carriedBy` test: cargo occupies its transport's
+ *     tile again, and the load test stops finding the transport there
+ *   - vision.ts counting carried units: the recon sees out of the hold
+ *   - view.ts sending cargo to anyone but its owner: the manifest leaks
+ *   - destroyUnit not recursing into cargo: the hold outlives the hull
+ *   - doMove not dragging cargo coordinates: the hold is left behind
+ * The sixth - filterEventsFor treating unitLoaded/unitUnloaded as public -
+ * has to be mutated as a always-push condition rather than by renaming the
+ * case labels, which does not compile and so silently runs no tests at all.
+ */
+
+/**
+ * A transport afloat with an infantry on the beach beside it.
+ *
+ * The tiles are searched for rather than hardcoded: `straits` is real map
+ * data and a later edit to it should not quietly turn these into tests of
+ * an empty ocean.
+ */
+function beachhead(): { state: MatchState; shore: Vec2; sea: Vec2 } {
+  const state = navalMatch();
+  const at = (x: number, y: number) => state.map.tiles[y * state.map.width + x].terrain;
+  const seaCost = (t: string) => TERRAIN[t].move_cost.sea ?? null;
+  const footCost = (t: string) => TERRAIN[t].move_cost.foot ?? null;
+
+  for (let y = 1; y < state.map.height - 1; y++) {
+    for (let x = 1; x < state.map.width - 1; x++) {
+      if (seaCost(at(x, y)) === null) continue;
+      // Not a port: a friendly repair tile tops the ship up every upkeep,
+      // which would quietly defuse the running-dry test below.
+      if (TERRAIN[at(x, y)].capturable) continue;
+      for (const step of [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }]) {
+        const sx = x + step.x;
+        const sy = y + step.y;
+        if (footCost(at(sx, sy)) === null) continue;
+        if (TERRAIN[at(sx, sy)].capturable) continue;
+        if (Object.values(state.units).some((u) => u.x === sx && u.y === sy)) continue;
+        if (Object.values(state.units).some((u) => u.x === x && u.y === y)) continue;
+
+        state.units["ship"] = {
+          id: "ship", unitType: "transport_ship", ownerSlot: 1, x, y,
+          hp: 100, fuel: UNITS.transport_ship.max_fuel, ammo: null,
+          hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+        };
+        state.units["grunt"] = {
+          id: "grunt", unitType: "infantry", ownerSlot: 1, x: sx, y: sy,
+          hp: 100, fuel: UNITS.infantry.max_fuel, ammo: null,
+          hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+        };
+        return { state, shore: { x: sx, y: sy }, sea: { x, y } };
+      }
+    }
+  }
+  throw new Error("straits has no open water beside passable land");
+}
+
+test("a transport loads an adjacent passenger and carries it off the board", () => {
+  const { state, shore } = beachhead();
+
+  const loaded = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.ok(loaded.ok, loaded.ok === false ? loaded.reason : "");
+  if (!loaded.ok) return;
+
+  const ship = loaded.state.units["ship"];
+  const grunt = loaded.state.units["grunt"];
+  assert.deepEqual(ship.cargo, ["grunt"]);
+  assert.equal(grunt.carriedBy, "ship");
+  // It rides along rather than staying on the beach.
+  assert.equal(grunt.x, ship.x);
+  assert.equal(grunt.y, ship.y);
+  // And the beach it left is free for anything else to walk onto.
+  assert.equal(unitAt(loaded.state, shore.x, shore.y), undefined);
+  // The transport's own tile still reports the *transport*, never its
+  // cargo. Listed cargo-first on purpose: unitAt returns the first match it
+  // finds, so an insertion-order-dependent assertion here would pass by
+  // luck rather than because loaded units are excluded.
+  const cargoFirst = structuredClone(loaded.state);
+  cargoFirst.units = { grunt: cargoFirst.units["grunt"], ship: cargoFirst.units["ship"] };
+  assert.equal(unitAt(cargoFirst, ship.x, ship.y)?.id, "ship");
+  assert.equal(
+    loaded.events.filter((e) => e.type === "unitLoaded").length, 1,
+    "loading reports itself",
+  );
+});
+
+test("cargo is not a lookout: a loaded unit adds no vision", () => {
+  const { state } = beachhead();
+  // A recon sees 5 tiles to the transport's 1, so if cargo were counted the
+  // difference would be impossible to miss - and impossible to explain away
+  // as some other unit's circle already covering the same ground.
+  state.units["grunt"].unitType = "recon";
+
+  const loaded = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.ok(loaded.ok);
+  if (!loaded.ok) return;
+
+  const carried = visibleTiles(loaded.state, 1);
+
+  // The same unit, same tile, same everything - just standing on the deck
+  // rather than inside the hold.
+  const onDeck = structuredClone(loaded.state);
+  onDeck.units["grunt"].carriedBy = null;
+
+  assert.ok(
+    visibleTiles(onDeck, 1).size > carried.size,
+    "a recon out of the hold must see further than one inside it",
+  );
+});
+
+test("a transport refuses cargo it has no room or no bay for", () => {
+  const { state } = beachhead();
+  const sea = state.units["ship"];
+
+  // A ship is not foot/wheels/treads, so it cannot be carried at all.
+  state.units["tug"] = {
+    id: "tug", unitType: "patrol_boat", ownerSlot: 1, x: sea.x, y: sea.y + 1,
+    hp: 100, fuel: 40, ammo: 6,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+  const wrongType = applyAction(state, 1, { type: "load", unitId: "tug", transportId: "ship" });
+  assert.equal(wrongType.ok, false);
+  assert.equal(wrongType.ok === false && wrongType.reason, "wrong_cargo_type");
+
+  // And capacity is 2, so a third passenger is refused.
+  state.units["ship"].cargo = ["a", "b"];
+  const full = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.equal(full.ok, false);
+  assert.equal(full.ok === false && full.reason, "transport_full");
+});
+
+test("you must be alongside to board", () => {
+  const { state, sea } = beachhead();
+  state.units["grunt"].x = sea.x;
+  state.units["grunt"].y = sea.y + 3;
+
+  const far = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.equal(far.ok, false);
+  assert.equal(far.ok === false && far.reason, "transport_not_adjacent");
+});
+
+test("a transport puts its cargo ashore, but only somewhere it can stand", () => {
+  const { state, shore, sea } = beachhead();
+  const loaded = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.ok(loaded.ok);
+  if (!loaded.ok) return;
+
+  // Fresh turn for the ship; the passenger spent its own boarding.
+  const afloat = structuredClone(loaded.state);
+  afloat.units["ship"].hasMoved = false;
+  afloat.units["ship"].hasActed = false;
+
+  // Back onto open water the infantry cannot walk on.
+  const intoTheSea = applyAction(afloat, 1, {
+    type: "unload", transportId: "ship", unitId: "grunt", to: { x: sea.x, y: sea.y },
+  });
+  assert.equal(intoTheSea.ok, false);
+
+  const ashore = applyAction(afloat, 1, {
+    type: "unload", transportId: "ship", unitId: "grunt", to: shore,
+  });
+  assert.ok(ashore.ok, ashore.ok === false ? ashore.reason : "");
+  if (!ashore.ok) return;
+
+  const grunt = ashore.state.units["grunt"];
+  assert.equal(grunt.carriedBy, null);
+  assert.deepEqual({ x: grunt.x, y: grunt.y }, shore);
+  assert.deepEqual(ashore.state.units["ship"].cargo, []);
+  // It landed this turn, so it does not also get to act.
+  assert.equal(grunt.hasActed, true);
+});
+
+test("sinking a transport takes its hold down with it", () => {
+  const { state } = beachhead();
+  const loaded = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.ok(loaded.ok);
+  if (!loaded.ok) return;
+
+  const sunk = structuredClone(loaded.state);
+  // Sea units that run dry are lost at the start of their own turn.
+  sunk.units["ship"].fuel = 1;
+  sunk.currentSlot = 2;
+  const nextTurn = applyAction(sunk, 2, { type: "endTurn" });
+  assert.ok(nextTurn.ok);
+  if (!nextTurn.ok) return;
+
+  assert.equal(nextTurn.state.units["ship"], undefined, "the transport is gone");
+  assert.equal(
+    nextTurn.state.units["grunt"], undefined,
+    "and so is the infantry that was inside it",
+  );
+  const destroyed = nextTurn.events.filter((e) => e.type === "unitDestroyed");
+  assert.equal(destroyed.length, 2, "both losses are reported, not just the hull");
+});
+
+test("the opponent is never told what is in a hold", () => {
+  const { state, sea } = beachhead();
+  const loaded = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.ok(loaded.ok);
+  if (!loaded.ok) return;
+
+  // Park an enemy scout right beside the transport so it is plainly visible.
+  const watched = structuredClone(loaded.state);
+  watched.units["spy"] = {
+    id: "spy", unitType: "recon", ownerSlot: 2, x: sea.x, y: sea.y + 1,
+    hp: 100, fuel: 60, ammo: 9,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+
+  const theirView = buildPlayerView(watched, 2);
+  const ids = theirView.units.map((u) => u.id);
+  assert.ok(ids.includes("ship"), "they can see the transport itself");
+  assert.ok(
+    !ids.includes("grunt"),
+    "but the infantry inside it must not appear in their view at all",
+  );
+  // And the manifest is not smuggled out on the transport either.
+  const seenShip = theirView.units.find((u) => u.id === "ship");
+  assert.equal(seenShip?.cargo, undefined);
+});
+
+test("a landing in the dark is not announced to the enemy", () => {
+  const { state, shore } = beachhead();
+  const events: GameEvent[] = [{
+    type: "unitUnloaded", unitId: "grunt", transportId: "ship",
+    ownerSlot: 1, at: shore,
+  }];
+
+  const mine = filterEventsFor(state, 1, events);
+  assert.equal(mine.length, 1, "the owner always hears about their own landing");
+
+  // Slot 2 has no eyes on that beach in the opening position.
+  const visible = visibleTiles(state, 2);
+  assert.ok(
+    !visible.has(shore.y * state.map.width + shore.x),
+    "fixture assumption: the far shore starts unwatched",
+  );
+  const theirs = filterEventsFor(state, 2, events);
+  assert.equal(theirs.length, 0, "an unwatched landing is silent");
+});
+
+test("a sailing transport takes its cargo's position with it", () => {
+  const { state, shore } = beachhead();
+  const loaded = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.ok(loaded.ok);
+  if (!loaded.ok) return;
+
+  const afloat = structuredClone(loaded.state);
+  afloat.units["ship"].hasMoved = false;
+  afloat.units["ship"].hasActed = false;
+  const ship = afloat.units["ship"];
+
+  // One tile along, to whichever neighbouring water the ship can reach.
+  const step = reachableTiles(afloat, ship).find(
+    (t) => (t.x !== ship.x || t.y !== ship.y) && t.cost > 0,
+  );
+  assert.ok(step, "fixture assumption: the transport has somewhere to sail");
+  if (!step) return;
+
+  const sailed = applyAction(afloat, 1, {
+    type: "move", unitId: "ship", path: [{ x: step.x, y: step.y }],
+  });
+  assert.ok(sailed.ok, sailed.ok === false ? sailed.reason : "");
+  if (!sailed.ok) return;
+
+  const carried = sailed.state.units["grunt"];
+  assert.deepEqual(
+    { x: carried.x, y: carried.y }, { x: step.x, y: step.y },
+    "cargo left behind at the old tile would be a phantom, and would report "
+      + "the hold dying in the wrong place when the transport is sunk",
+  );
+  assert.equal(unitAt(sailed.state, shore.x, shore.y), undefined);
 });

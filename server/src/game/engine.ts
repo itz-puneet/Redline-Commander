@@ -9,9 +9,9 @@
  * the networking layer replaceable.
  */
 
-import { FACTIONS, loadMap, terrainStats, tileAt, unitStats } from "./data";
+import { FACTIONS, loadMap, moveCost, terrainStats, tileAt, unitStats } from "./data";
 import { canEngage, displayHp, resolveCombat } from "./combat";
-import { validatePath } from "./movement";
+import { inBounds, manhattan, unitAt, validatePath } from "./movement";
 import { isVisibleTo, visibleTiles } from "./vision";
 import type {
   Action,
@@ -39,10 +39,6 @@ function clone<T>(value: T): T {
 
 function fail(reason: string): ActionResult {
   return { ok: false, reason };
-}
-
-function unitAt(state: MatchState, x: number, y: number): Unit | undefined {
-  return Object.values(state.units).find((u) => u.x === x && u.y === y);
 }
 
 /* ------------------------------------------------------------------ */
@@ -108,6 +104,7 @@ function spawnUnit(
     hasActed: false,
     captureProgress: 0,
     cargo: [],
+    carriedBy: null,
   };
 }
 
@@ -187,6 +184,10 @@ function dispatch(state: MatchState, slot: number, action: Action): ActionResult
       return doBuild(state, slot, action.unitType, action.at);
     case "wait":
       return doWait(state, slot, action.unitId);
+    case "load":
+      return doLoad(state, slot, action.unitId, action.transportId);
+    case "unload":
+      return doUnload(state, slot, action.transportId, action.unitId, action.to);
     case "endTurn":
       return doEndTurn(state, slot);
     default:
@@ -244,6 +245,16 @@ function doMove(state: MatchState, slot: number, unitId: string, path: Vec2[]): 
 
   unit.x = to.x;
   unit.y = to.y;
+  // The hold rides along. Cargo is off the board but keeps its transport's
+  // coordinates, so leaving them behind would strand a phantom at the tile
+  // the transport just left and report the hold dying in the wrong place
+  // when the transport is sunk.
+  for (const carriedId of unit.cargo) {
+    const carried = next.units[carriedId];
+    if (!carried) continue;
+    carried.x = to.x;
+    carried.y = to.y;
+  }
   unit.fuel = Math.max(0, unit.fuel - check.cost);
   unit.hasMoved = true;
   // Moving off a tile abandons any capture in progress on it.
@@ -303,11 +314,7 @@ function doAttack(
       damage: outcome.damage,
       counterDamage: 0,
     });
-    events.push({
-      type: "unitDestroyed", unitId: targetUnitId, ownerSlot: defender.ownerSlot,
-      at: { x: defender.x, y: defender.y },
-    });
-    delete next.units[targetUnitId];
+    events.push(...destroyUnit(next, targetUnitId));
   } else {
     attacker.hp -= outcome.counterDamage;
     if (outcome.counterDamage > 0 && defender.ammo !== null) {
@@ -323,11 +330,7 @@ function doAttack(
       counterDamage: outcome.counterDamage,
     });
     if (attacker.hp <= 0) {
-      events.push({
-        type: "unitDestroyed", unitId, ownerSlot: attacker.ownerSlot,
-        at: { x: attacker.x, y: attacker.y },
-      });
-      delete next.units[unitId];
+      events.push(...destroyUnit(next, unitId));
     }
   }
 
@@ -433,6 +436,140 @@ function doWait(state: MatchState, slot: number, unitId: string): ActionResult {
   return { ok: true, state: next, events: [] };
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Transports                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Removes a unit and, if it was carrying anything, everything in its hold.
+ *
+ * Cargo is not on the board, so nothing else would ever notice it had been
+ * orphaned: it would keep its dead transport's coordinates, count toward
+ * `hasUnits` and keep a defeated player alive forever. Recursive because a
+ * transport is a unit like any other and the data does not forbid nesting.
+ *
+ * Mutates `state` in place - only ever called on an already-cloned state.
+ */
+function destroyUnit(state: MatchState, unitId: string): GameEvent[] {
+  const unit = state.units[unitId];
+  if (!unit) return [];
+
+  const events: GameEvent[] = [{
+    type: "unitDestroyed", unitId, ownerSlot: unit.ownerSlot,
+    at: { x: unit.x, y: unit.y },
+  }];
+  for (const carriedId of [...unit.cargo]) {
+    events.push(...destroyUnit(state, carriedId));
+  }
+  delete state.units[unitId];
+  return events;
+}
+
+function doLoad(
+  state: MatchState,
+  slot: number,
+  unitId: string,
+  transportId: string,
+): ActionResult {
+  const found = ownedActiveUnit(state, slot, unitId);
+  if ("error" in found) return fail(found.error);
+  if (found.carriedBy !== null) return fail("unit_already_loaded");
+
+  const transport = state.units[transportId];
+  if (!transport || transport.ownerSlot !== slot) return fail("no_such_transport");
+  if (transport.id === found.id) return fail("cannot_load_into_itself");
+  if (transport.carriedBy !== null) return fail("transport_is_loaded");
+
+  const transportStats = unitStats(transport.unitType);
+  const passengerStats = unitStats(found.unitType);
+  if (!transportStats || !passengerStats) return fail("unknown_unit_type");
+  if (transportStats.carry_capacity <= 0) return fail("unit_cannot_carry");
+  if (transport.cargo.length >= transportStats.carry_capacity) return fail("transport_full");
+  if (!transportStats.carry_move_types.includes(passengerStats.move_type)) {
+    return fail("wrong_cargo_type");
+  }
+  // Step aboard from an adjacent tile. The passenger cannot *move* onto the
+  // transport - a loaded tile is occupied like any other - so loading is
+  // what crosses that last tile, and it costs the passenger its turn.
+  if (manhattan(found, transport) > 1) return fail("transport_not_adjacent");
+
+  const next = clone(state);
+  const passenger = next.units[unitId];
+  const carrier = next.units[transportId];
+
+  passenger.carriedBy = transportId;
+  passenger.x = carrier.x;
+  passenger.y = carrier.y;
+  passenger.hasMoved = true;
+  passenger.hasActed = true;
+  // Boarding abandons any capture the passenger had started.
+  passenger.captureProgress = 0;
+  carrier.cargo.push(unitId);
+  next.version += 1;
+
+  return {
+    ok: true,
+    state: next,
+    events: [{
+      type: "unitLoaded", unitId, transportId,
+      ownerSlot: passenger.ownerSlot, at: { x: carrier.x, y: carrier.y },
+    }],
+  };
+}
+
+function doUnload(
+  state: MatchState,
+  slot: number,
+  transportId: string,
+  unitId: string,
+  to: Vec2,
+): ActionResult {
+  const found = ownedActiveUnit(state, slot, transportId);
+  if ("error" in found) return fail(found.error);
+  if (!found.cargo.includes(unitId)) return fail("not_in_this_transport");
+
+  const passenger = state.units[unitId];
+  if (!passenger) return fail("no_such_unit");
+  const passengerStats = unitStats(passenger.unitType);
+  if (!passengerStats) return fail("unknown_unit_type");
+
+  if (!inBounds(state.map, to.x, to.y)) return fail("out_of_bounds");
+  // Onto the beach, not back onto the deck.
+  if (manhattan(to, found) !== 1) return fail("not_adjacent");
+  if (unitAt(state, to.x, to.y)) return fail("tile_occupied");
+
+  const tile = tileAt(state.map, to.x, to.y);
+  if (!tile) return fail("no_such_tile");
+  if (moveCost(tile.terrain, passengerStats.move_type) === null) {
+    return fail("impassable_terrain");
+  }
+
+  const next = clone(state);
+  const carrier = next.units[transportId];
+  const landed = next.units[unitId];
+
+  carrier.cargo = carrier.cargo.filter((id) => id !== unitId);
+  // The transport has committed its position, but may still put the rest of
+  // its hold ashore this turn - so hasMoved, not hasActed.
+  carrier.hasMoved = true;
+  landed.carriedBy = null;
+  landed.x = to.x;
+  landed.y = to.y;
+  landed.hasMoved = true;
+  landed.hasActed = true;
+  next.version += 1;
+
+  return {
+    ok: true,
+    state: next,
+    events: [{
+      type: "unitUnloaded", unitId, transportId,
+      ownerSlot: landed.ownerSlot, at: { x: to.x, y: to.y },
+    }],
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Turn flow                                                           */
 /* ------------------------------------------------------------------ */
@@ -478,6 +615,10 @@ function beginTurn(state: MatchState, slot: number): GameEvent[] {
 
     const stats = unitStats(unit.unitType);
     if (!stats) continue;
+    // Cargo is in a hold, not in the field: it neither burns fuel nor gets
+    // repaired. It still gets its flags cleared above, so it can disembark
+    // the moment the transport puts it ashore.
+    if (unit.carriedBy !== null) continue;
 
     const tile = tileAt(state.map, unit.x, unit.y);
     const terrain = tile ? terrainStats(tile.terrain) : undefined;
@@ -493,11 +634,7 @@ function beginTurn(state: MatchState, slot: number): GameEvent[] {
       unit.fuel = Math.max(0, unit.fuel - drain);
       // Air and sea units that run dry are lost.
       if (drain > 0 && unit.fuel === 0) {
-        events.push({
-          type: "unitDestroyed", unitId: unit.id, ownerSlot: unit.ownerSlot,
-          at: { x: unit.x, y: unit.y },
-        });
-        delete state.units[unit.id];
+        events.push(...destroyUnit(state, unit.id));
       }
     }
   }

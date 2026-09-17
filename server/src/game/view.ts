@@ -64,6 +64,11 @@ export function buildPlayerView(state: MatchState, slot: number): PlayerView {
   for (const unit of Object.values(state.units)) {
     if (unit.ownerSlot === slot) {
       units.push({ ...unit });
+    } else if (unit.carriedBy !== null) {
+      // Loaded units carry their transport's coordinates, so a visible
+      // transport would otherwise hand the opponent its whole manifest -
+      // exactly the hidden information redactEnemy exists to withhold.
+      continue;
     } else if (visible.has(unit.y * width + unit.x)) {
       units.push(redactEnemy(unit));
     }
@@ -168,6 +173,14 @@ export function filterEventsFor(
 
       case "unitBuilt":
         if (event.bySlot === slot || seen(event.at.x, event.at.y)) out.push(event);
+        break;
+
+      case "unitLoaded":
+      case "unitUnloaded":
+        // Loading and unloading are ordinary board moves and leak the same
+        // way a capture in fog would: an unwatched landing would otherwise
+        // announce exactly where a transport put its cargo ashore.
+        if (event.ownerSlot === slot || seen(event.at.x, event.at.y)) out.push(event);
         break;
 
       case "turnStarted":

@@ -183,6 +183,14 @@ test("malformed actions are refused before they reach the engine", async () => {
   assert.equal(isWellFormedAction({ type: "move", unitId: 7, path: [] }), false);
   assert.equal(isWellFormedAction({ type: "build", unitType: "recon" }), false, "no tile");
   assert.equal(isWellFormedAction({ type: "attack", unitId: "u1" }), false, "no target");
+  assert.equal(
+    isWellFormedAction({ type: "load", unitId: "u1" }), false, "no transport");
+  assert.equal(
+    isWellFormedAction({ type: "unload", transportId: "t1", unitId: "u1" }), false,
+    "nowhere to put it down");
+  assert.equal(
+    isWellFormedAction({ type: "unload", transportId: "t1", unitId: "u1", to: { x: 1 } }),
+    false, "half a tile");
   assert.equal(isWellFormedAction({ type: "teleport", unitId: "u1" }), false);
   assert.equal(isWellFormedAction(null), false);
   assert.equal(isWellFormedAction("endTurn"), false);
@@ -196,6 +204,10 @@ test("malformed actions are refused before they reach the engine", async () => {
     isWellFormedAction({ type: "move", unitId: "u1", path: [{ x: 1, y: 2 }] }), true);
   assert.equal(isWellFormedAction({ type: "endTurn" }), true);
   assert.equal(isWellFormedAction({ type: "build", unitType: "recon", at: { x: 0, y: 0 } }), true);
+  assert.equal(isWellFormedAction({ type: "load", unitId: "u1", transportId: "t1" }), true);
+  assert.equal(
+    isWellFormedAction({ type: "unload", transportId: "t1", unitId: "u1", to: { x: 3, y: 4 } }),
+    true);
 
   // And decode rejects the whole frame rather than passing it on.
   assert.equal(decode(JSON.stringify({ t: "action", matchId: "m", action: { type: "move" } })), null);

@@ -21,8 +21,18 @@ function key(x: number, y: number): string {
   return `${x},${y}`;
 }
 
-function unitAt(state: MatchState, x: number, y: number): Unit | undefined {
-  return Object.values(state.units).find((u) => u.x === x && u.y === y);
+/**
+ * What is standing on a tile, if anything.
+ *
+ * Exported and used by the engine too, rather than duplicated there: a unit
+ * loaded into a transport keeps its transport's coordinates, so a copy of
+ * this that forgot the `carriedBy` test would treat a full hold as a wall
+ * and let the two implementations disagree about what occupies a tile.
+ */
+export function unitAt(state: MatchState, x: number, y: number): Unit | undefined {
+  return Object.values(state.units).find(
+    (u) => u.carriedBy === null && u.x === x && u.y === y,
+  );
 }
 
 const NEIGHBOURS: Vec2[] = [

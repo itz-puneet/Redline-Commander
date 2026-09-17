@@ -101,6 +101,14 @@ export function isWellFormedAction(value: unknown): boolean {
       return typeof action.unitId === "string";
     case "build":
       return typeof action.unitType === "string" && isVec2(action.at);
+    case "load":
+      return typeof action.unitId === "string" && typeof action.transportId === "string";
+    case "unload":
+      return (
+        typeof action.transportId === "string" &&
+        typeof action.unitId === "string" &&
+        isVec2(action.to)
+      );
     case "endTurn":
       return true;
     default:

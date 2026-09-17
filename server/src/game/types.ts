@@ -61,6 +61,16 @@ export interface Unit {
   captureProgress: number;
   /** Unit ids currently loaded into this unit (transports). */
   cargo: string[];
+  /**
+   * The transport carrying this unit, or null when it is on the board.
+   *
+   * A carried unit keeps its x/y in step with its transport so that losing
+   * the transport has a place to report the cargo dying, but it is NOT on
+   * the board: it blocks no tile, sees nothing, and is never sent to an
+   * opponent. Every place that asks "what is standing here" goes through
+   * `unitAt`, which skips these.
+   */
+  carriedBy: string | null;
 }
 
 export interface Tile {
@@ -151,6 +161,21 @@ export interface WaitAction {
   unitId: string;
 }
 
+export interface LoadAction {
+  type: "load";
+  /** The unit stepping aboard. Must be adjacent to, or already on, the transport. */
+  unitId: string;
+  transportId: string;
+}
+
+export interface UnloadAction {
+  type: "unload";
+  transportId: string;
+  unitId: string;
+  /** Where to put it down. Must be adjacent to the transport and passable. */
+  to: Vec2;
+}
+
 export interface EndTurnAction {
   type: "endTurn";
 }
@@ -161,6 +186,8 @@ export type Action =
   | CaptureAction
   | BuildAction
   | WaitAction
+  | LoadAction
+  | UnloadAction
   | EndTurnAction;
 
 /* ------------------------------------------------------------------ */
@@ -186,6 +213,14 @@ export type GameEvent =
     }
   | { type: "unitDestroyed"; unitId: string; ownerSlot: number; at: Vec2 }
   | { type: "tileCaptured"; x: number; y: number; bySlot: number }
+  | {
+      type: "unitLoaded"; unitId: string; transportId: string;
+      ownerSlot: number; at: Vec2;
+    }
+  | {
+      type: "unitUnloaded"; unitId: string; transportId: string;
+      ownerSlot: number; at: Vec2;
+    }
   | { type: "captureProgressed"; unitId: string; ownerSlot: number; progress: number }
   | {
       type: "unitBuilt"; unitId: string; unitType: string; bySlot: number;

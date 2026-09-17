@@ -34,6 +34,9 @@ export function visibleTiles(state: MatchState, slot: number): Set<number> {
 
   for (const unit of Object.values(state.units)) {
     if (unit.ownerSlot !== slot) continue;
+    // Cargo sees nothing from inside the hold, and must not extend the
+    // transport's own vision by sitting on its coordinates.
+    if (unit.carriedBy !== null) continue;
     const radius = visionRadius(state, unit);
     for (let y = Math.max(0, unit.y - radius); y <= Math.min(height - 1, unit.y + radius); y++) {
       for (let x = Math.max(0, unit.x - radius); x <= Math.min(width - 1, unit.x + radius); x++) {
