@@ -73,7 +73,8 @@ it step by step; the client's own idea of the cost is never trusted, and a
 malformed action is rejected at the transport before it reaches the rules.
 
 `load` moves the passenger aboard from an adjacent tile and costs it its
-turn. It cannot be done with a `move`: a loaded tile is occupied like any
+turn. Two units carry: the transport ship (two of anything on the ground)
+and the helicopter (one foot unit). It cannot be done with a `move`: a loaded tile is occupied like any
 other, so boarding is what crosses that last tile. `unload` puts one unit
 from the hold onto an adjacent passable tile; the transport may empty the
 rest of its hold in the same turn, but has committed its position.

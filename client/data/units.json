@@ -189,8 +189,10 @@
       "min_range": 1,
       "max_range": 1,
       "can_capture": false,
-      "carry_capacity": 0,
-      "carry_move_types": [],
+      "carry_capacity": 1,
+      "carry_move_types": [
+        "foot"
+      ],
       "built_at": [
         "airport"
       ]

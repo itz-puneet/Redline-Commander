@@ -35,6 +35,13 @@
       "max_players": 2,
       "size": "24x16",
       "summary": "Large naval map. A reef-strewn channel separates the coasts, with a causeway at each edge and a transport apiece."
+    },
+    {
+      "id": "isles",
+      "display_name": "Sundered Isles",
+      "max_players": 2,
+      "size": "20x14",
+      "summary": "Two islands with no land between them. Infantry can only reach the enemy HQ by transport, so the channel is the whole game."
     }
   ]
 }

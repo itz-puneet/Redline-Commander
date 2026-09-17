@@ -1635,3 +1635,66 @@ test("a hotseat match delivers one seat's payload, not two to one socket", async
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("a helicopter airlifts one foot unit, and only a foot unit", () => {
+  const { state, shore } = beachhead();
+  // Swap the transport for a helicopter on the same water tile. Air units
+  // sit anywhere, so this is a legal place for one to hover.
+  const ship = state.units["ship"];
+  state.units["ship"] = {
+    id: "ship", unitType: "helicopter", ownerSlot: 1, x: ship.x, y: ship.y,
+    hp: 100, fuel: UNITS.helicopter.max_fuel, ammo: UNITS.helicopter.max_ammo,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+
+  const lifted = applyAction(state, 1, { type: "load", unitId: "grunt", transportId: "ship" });
+  assert.ok(lifted.ok, lifted.ok === false ? lifted.reason : "");
+  if (!lifted.ok) return;
+  assert.deepEqual(lifted.state.units["ship"].cargo, ["grunt"]);
+  assert.equal(lifted.state.units["grunt"].carriedBy, "ship");
+
+  // Capacity is one, so a second passenger is refused where the ship would
+  // have taken it.
+  const crowded = structuredClone(lifted.state);
+  crowded.units["second"] = {
+    id: "second", unitType: "infantry", ownerSlot: 1, x: shore.x, y: shore.y,
+    hp: 100, fuel: 99, ammo: null,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+  const full = applyAction(crowded, 1, { type: "load", unitId: "second", transportId: "ship" });
+  assert.equal(full.ok, false);
+  assert.equal(full.ok === false && full.reason, "transport_full");
+
+  // And it lifts infantry, not armour - carry_move_types is foot only.
+  const withTank = structuredClone(state);
+  withTank.units["tank"] = {
+    id: "tank", unitType: "light_tank", ownerSlot: 1, x: shore.x, y: shore.y,
+    hp: 100, fuel: 70, ammo: 9,
+    hasMoved: false, hasActed: false, captureProgress: 0, cargo: [], carriedBy: null,
+  };
+  delete withTank.units["grunt"];
+  const armour = applyAction(withTank, 1, { type: "load", unitId: "tank", transportId: "ship" });
+  assert.equal(armour.ok, false);
+  assert.equal(armour.ok === false && armour.reason, "wrong_cargo_type");
+
+  // Setting it down: a helicopter may hover over water, but the infantry it
+  // is carrying still has to be put on ground it can stand on.
+  const airborne = structuredClone(lifted.state);
+  airborne.units["ship"].hasMoved = false;
+  airborne.units["ship"].hasActed = false;
+  const intoTheSea = applyAction(airborne, 1, {
+    type: "unload", transportId: "ship", unitId: "grunt",
+    to: { x: airborne.units["ship"].x, y: airborne.units["ship"].y + 1 },
+  });
+  assert.equal(intoTheSea.ok, false, "infantry cannot be dropped into open water");
+
+  const ashore = applyAction(airborne, 1, {
+    type: "unload", transportId: "ship", unitId: "grunt", to: shore,
+  });
+  assert.ok(ashore.ok, ashore.ok === false ? ashore.reason : "");
+  if (!ashore.ok) return;
+  assert.equal(ashore.state.units["grunt"].carriedBy, null);
+  assert.deepEqual(
+    { x: ashore.state.units["grunt"].x, y: ashore.state.units["grunt"].y }, shore,
+  );
+});

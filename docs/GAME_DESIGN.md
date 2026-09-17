@@ -33,9 +33,18 @@ Defined in `shared/data/units.json`.
 | Light Tank | Main line unit | 700 | 6 | treads | 2 | 70 | 9 | direct | 1 |
 | Heavy Tank | Late-game brawler | 1600 | 5 | treads | 1 | 50 | 6 | direct | 1 |
 | Anti-Air | Counters aircraft | 800 | 6 | treads | 2 | 60 | 9 | direct | 1 |
-| Helicopter | Fast air unit | 900 | 6 | air | 3 | 99 | 6 | direct | 1 |
+| Helicopter | Fast air unit; airlifts one foot unit | 900 | 6 | air | 3 | 99 | 6 | direct | 1 |
 | Fighter Jet | Air superiority only | 2000 | 9 | air | 2 | 99 | 9 | direct | 1 |
 | Transport Ship | Carries land units over water | 500 | 6 | sea | 1 | 99 | — | unarmed | — |
+
+Two units carry others, and between them they are what lets a map put
+infantry somewhere they could not walk. The Transport Ship takes two of
+anything on the ground (foot, wheels or treads) and needs a port to be
+built. The Helicopter lifts a single foot unit and is built at an airport,
+so an island is reachable by air as well as by sea - at the cost of a slot
+on a unit that is also one of the better things to be shooting with. Cargo
+is off the board while carried: it holds no ground, sees nothing, and dies
+with its carrier.
 
 Only Infantry and Anti-Tank Infantry can capture. Air and sea units burn fuel
 every turn (5 and 1) and are lost at zero unless they end a turn on a

@@ -159,34 +159,13 @@ for (const entry of MAP_INDEX) {
     assert.deepEqual(hqSlots, expected);
   });
 
-  test(`${entry.id}: every HQ can be reached on foot from every other`, () => {
-    const hqs: { x: number; y: number }[] = [];
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
-        if (TERRAIN[at(x, y).terrain].is_hq) hqs.push({ x, y });
-      }
-    }
-    assert.ok(hqs.length > 0, "no HQ on the map");
-
-    const seen = new Set<string>([`${hqs[0].x},${hqs[0].y}`]);
-    const queue = [hqs[0]];
-    while (queue.length) {
-      const { x, y } = queue.pop()!;
-      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
-        if (nx < 0 || ny < 0 || nx >= map.width || ny >= map.height) continue;
-        const key = `${nx},${ny}`;
-        if (seen.has(key)) continue;
-        if (TERRAIN[at(nx, ny).terrain].move_cost.foot === null) continue;
-        seen.add(key);
-        queue.push({ x: nx, y: ny });
-      }
-    }
-    const unreachable = hqs.filter((hq) => !seen.has(`${hq.x},${hq.y}`));
+  test(`${entry.id}: every HQ can be reached by infantry, on foot or carried`, () => {
     assert.deepEqual(
-      unreachable,
+      hqsBeyondReach(map, startUnits),
       [],
-      "an HQ no foot unit can walk to can only be captured by shipping infantry " +
-        "across, so the map stops being winnable for a player who builds no navy",
+      "an HQ that infantry can neither walk to nor be carried to cannot be "
+        + "captured at all, so the map can only be won by wiping out every "
+        + "enemy unit - which nothing else would report",
     );
   });
 
@@ -255,6 +234,135 @@ test("every unit type is buildable on at least one map", () => {
  */
 
 const WATER = new Set(["shallow_water", "deep_water", "reef"]);
+
+/**
+ * Connected components over the tiles `passable` accepts, as a component id
+ * per tile index (-1 for tiles it rejects). Used to ask which landmass an HQ
+ * sits on, and which body of water touches which shores.
+ */
+function components(
+  map: { width: number; height: number; tiles: { terrain: string }[] },
+  passable: (terrain: string) => boolean,
+): { id: number[]; count: number } {
+  const id = new Array<number>(map.tiles.length).fill(-1);
+  let count = 0;
+
+  for (let seed = 0; seed < map.tiles.length; seed++) {
+    if (id[seed] >= 0 || !passable(map.tiles[seed].terrain)) continue;
+    id[seed] = count;
+    const queue = [seed];
+    while (queue.length) {
+      const cur = queue.pop()!;
+      const x = cur % map.width;
+      const y = Math.floor(cur / map.width);
+      for (const n of neighbours4(x, y, map.width, map.height)) {
+        const next = n.y * map.width + n.x;
+        if (id[next] >= 0 || !passable(map.tiles[next].terrain)) continue;
+        id[next] = count;
+        queue.push(next);
+      }
+    }
+    count += 1;
+  }
+  return { id, count };
+}
+
+/** Union-find, for merging landmasses a carrier can move infantry between. */
+class DisjointSet {
+  private parent: number[];
+
+  constructor(size: number) {
+    this.parent = Array.from({ length: size }, (_, i) => i);
+  }
+
+  find(a: number): number {
+    while (this.parent[a] !== a) {
+      this.parent[a] = this.parent[this.parent[a]];
+      a = this.parent[a];
+    }
+    return a;
+  }
+
+  union(a: number, b: number): void {
+    this.parent[this.find(a)] = this.find(b);
+  }
+
+  connected(a: number, b: number): boolean {
+    return a >= 0 && b >= 0 && this.find(a) === this.find(b);
+  }
+}
+
+/**
+ * The HQs infantry could never reach, as "x,y" - on foot, or carried.
+ *
+ * An HQ does not have to be walkable to: it is enough that the map can put
+ * infantry ashore beside it. What counts as "can" is read off units.json
+ * rather than named here, so a carrier added or removed later changes which
+ * maps are legal without anyone editing this file.
+ *
+ * Kept as a function rather than inline in the per-map loop so both of its
+ * branches can be exercised directly. The shipped maps only ever cover
+ * whichever branch they happen to need, and that changed the moment the
+ * helicopter learned to carry - `isles` stopped proving anything about the
+ * sea route, because its airports linked the islands anyway.
+ */
+function hqsBeyondReach(
+  map: { width: number; height: number; tiles: { terrain: string }[] },
+  startUnits: { unitType: string }[],
+): string[] {
+  const hqs: { x: number; y: number }[] = [];
+  for (let i = 0; i < map.tiles.length; i++) {
+    if (TERRAIN[map.tiles[i].terrain].is_hq) {
+      hqs.push({ x: i % map.width, y: Math.floor(i / map.width) });
+    }
+  }
+  if (hqs.length === 0) return [];
+
+  const land = components(map, (t) => TERRAIN[t].move_cost.foot !== null);
+  const groups = new DisjointSet(land.count);
+
+  // A carrier counts only if this map can actually field it: one is parked
+  // here at the start, or something on the board builds it.
+  const fieldable = Object.entries(UNITS).filter(
+    ([type, stats]) =>
+      stats.carry_capacity > 0 &&
+      stats.carry_move_types.includes("foot") &&
+      (startUnits.some((u) => u.unitType === type) ||
+        stats.built_at.some((terrain) => map.tiles.some((tile) => tile.terrain === terrain))),
+  );
+
+  for (const [, stats] of fieldable) {
+    if (stats.move_type === "air") {
+      // Air crosses everything, so one air transport links every landmass.
+      for (let c = 1; c < land.count; c++) groups.union(0, c);
+      continue;
+    }
+    // A surface carrier links the landmasses whose shores one body of water
+    // touches: it loads from a tile beside it and unloads onto another.
+    const water = components(map, (t) => TERRAIN[t].move_cost[stats.move_type] !== null);
+    const shores = new Map<number, number[]>();
+    for (let i = 0; i < map.tiles.length; i++) {
+      if (water.id[i] < 0) continue;
+      const x = i % map.width;
+      const y = Math.floor(i / map.width);
+      for (const n of neighbours4(x, y, map.width, map.height)) {
+        const j = n.y * map.width + n.x;
+        if (land.id[j] < 0) continue;
+        const seen = shores.get(water.id[i]) ?? [];
+        if (!seen.includes(land.id[j])) seen.push(land.id[j]);
+        shores.set(water.id[i], seen);
+      }
+    }
+    for (const reachable of shores.values()) {
+      for (let k = 1; k < reachable.length; k++) groups.union(reachable[0], reachable[k]);
+    }
+  }
+
+  const home = land.id[hqs[0].y * map.width + hqs[0].x];
+  return hqs
+    .filter((hq) => !groups.connected(home, land.id[hq.y * map.width + hq.x]))
+    .map((hq) => `${hq.x},${hq.y}`);
+}
 
 function neighbours4(x: number, y: number, width: number, height: number) {
   return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const)
@@ -468,3 +576,87 @@ for (const entry of MAP_INDEX) {
     assert.ok(ended.ok, ended.ok === false ? ended.reason : "");
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* The reachability rule itself                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Two islands and nothing else, so each way of crossing can be tested on
+ * its own.
+ *
+ * The shipped maps cannot do this. `isles` is the only one whose HQs share
+ * no landmass, and it has both a port and an airport - so it proves only
+ * that *something* links them, and stopped proving anything about the sea
+ * route the moment the helicopter learned to carry infantry. These pin each
+ * branch to the carrier that is supposed to be doing the work.
+ */
+/*
+ * Verified against three mutations, each caught by exactly the case that is
+ * supposed to cover it:
+ *   - the sea branch stops linking shores  -> the shipped-in island fails
+ *   - the air branch stops linking masses  -> the flown-in island fails
+ *   - the fieldable gate always passes     -> the stranded island is called
+ *     reachable with no port and no airport on it
+ */
+function twoIslands(glyphs: string[]) {
+  const legend: Record<string, string> = {
+    H: "hq", p: "plains", s: "shallow_water", P: "port", A: "airport",
+  };
+  const width = glyphs[0].length;
+  return {
+    width,
+    height: glyphs.length,
+    tiles: glyphs.flatMap((row) => [...row].map((g) => ({ terrain: legend[g] }))),
+  };
+}
+
+test("infantry can be shipped to an island, so its HQ counts as reachable", () => {
+  // A port on each island and no airport: only the transport ship applies.
+  const shipped = twoIslands([
+    "HppP",
+    "ssss",
+    "PppH",
+  ]);
+  assert.deepEqual(hqsBeyondReach(shipped, []), [], "a port on each shore should be enough");
+
+  // The same islands with nothing to carry anyone: now it really is cut off.
+  const stranded = twoIslands([
+    "Hppp",
+    "ssss",
+    "pppH",
+  ]);
+  assert.deepEqual(
+    hqsBeyondReach(stranded, []), ["3,2"],
+    "with no port and no airport there is no way onto the far island",
+  );
+
+  // And a transport that starts on the map counts even with nothing to
+  // build it from - which is how a map can ship without owning a port.
+  assert.deepEqual(
+    hqsBeyondReach(stranded, [{ unitType: "transport_ship" }]), [],
+    "a transport parked on the map at the start is still a way across",
+  );
+});
+
+test("infantry can be flown to an island, so its HQ counts as reachable", () => {
+  // An airport on each island and NO port, so the sea branch cannot fire:
+  // the helicopter's lift is the only thing that can link these.
+  const flown = twoIslands([
+    "HppA",
+    "ssss",
+    "AppH",
+  ]);
+  assert.deepEqual(hqsBeyondReach(flown, []), [], "an airport on each shore should be enough");
+
+  // This is only true while some air unit can carry foot cargo. If that is
+  // ever taken away the map above becomes unwinnable by capture, and this
+  // check is what says so rather than letting it ship.
+  const airLift = Object.entries(UNITS).filter(
+    ([, s]) => s.move_type === "air" && s.carry_capacity > 0 && s.carry_move_types.includes("foot"),
+  );
+  assert.ok(
+    airLift.length > 0,
+    "no air unit carries infantry any more, so the flown-in route above is fiction",
+  );
+});

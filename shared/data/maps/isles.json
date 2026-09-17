@@ -1,0 +1,105 @@
+{
+  "id": "isles",
+  "display_name": "Sundered Isles",
+  "max_players": 2,
+  "width": 20,
+  "height": 14,
+  "_legend": {
+    "p": "plains",
+    "r": "road",
+    "f": "forest",
+    "m": "mountain",
+    "v": "river",
+    "s": "shallow_water",
+    "d": "deep_water",
+    "e": "reef",
+    "C": "city",
+    "F": "factory",
+    "A": "airport",
+    "P": "port",
+    "H": "hq"
+  },
+  "tiles": [
+    "HCppppppCpppppppppfm",
+    "CFrppppppppppppppppp",
+    "prrppppfppppppCppppp",
+    "pprppppppmmppppppppp",
+    "ppPppppppppppApppppp",
+    "ssssssssssssssssssss",
+    "ddddddddeddedddddddd",
+    "ddddddddeddedddddddd",
+    "ssssssssssssssssssss",
+    "ppppppAppppppppppPpp",
+    "pppppppppmmpppppprpp",
+    "pppppCppppppfpppprrp",
+    "ppppppppppppppppprFC",
+    "mfpppppppppCppppppCH"
+  ],
+  "_tile_owners_comment": "Ownership is by index: 0 = neutral, 1 = player slot 1, 2 = player slot 2. Only capturable tiles may be non-zero.",
+  "tile_owners": [
+    "11000000000000000000",
+    "11000000000000000000",
+    "00000000000000000000",
+    "00000000000000000000",
+    "00100000000000000000",
+    "00000000000000000000",
+    "00000000000000000000",
+    "00000000000000000000",
+    "00000000000000000000",
+    "00000000000000000200",
+    "00000000000000000000",
+    "00000000000000000000",
+    "00000000000000000022",
+    "00000000000000000022"
+  ],
+  "start_units": [
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 3,
+      "y": 1
+    },
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "slot": 1,
+      "unit_type": "light_tank",
+      "x": 3,
+      "y": 2
+    },
+    {
+      "slot": 1,
+      "unit_type": "transport_ship",
+      "x": 2,
+      "y": 5
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 16,
+      "y": 12
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 17,
+      "y": 11
+    },
+    {
+      "slot": 2,
+      "unit_type": "light_tank",
+      "x": 16,
+      "y": 11
+    },
+    {
+      "slot": 2,
+      "unit_type": "transport_ship",
+      "x": 17,
+      "y": 8
+    }
+  ]
+}
