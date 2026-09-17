@@ -108,6 +108,10 @@ Built per player by `server/src/game/view.ts`:
 - **Own units** in full.
 - **Enemy units** only where visible, and stripped of `fuel`, `ammo` and
   `cargo` — a player cannot observe those.
+- `hotseat` marks a pass-and-play match: one `playerId` holds every seat and
+  the server sends whichever seat is to move. One payload per *connection*,
+  never one per seat - two frames racing to one socket would leave the loser
+  deciding what is on screen - and never a combined view.
 - **Own funds and directive charge** only; the opponent's read `null`.
   `activeDirective` is public for both - a directive's effects are plain on
   the board the moment it fires.

@@ -135,6 +135,17 @@ export interface MatchState {
   winnerSlot: number | null;
   /** Monotonic; every applied action bumps it. Clients use it to detect gaps. */
   version: number;
+  /**
+   * Pass-and-play: one person holds every seat on one device.
+   *
+   * The only thing this changes is who is allowed to sit down - the same
+   * playerId may take more than one seat. Everything downstream still works
+   * per slot: the server builds one seat's fogged view at a time and sends
+   * whichever seat is to move, so a hotseat client never receives a combined
+   * picture of the board. The player is trusted not to peek at a screen they
+   * are holding, exactly as they are across a table.
+   */
+  hotseat: boolean;
 }
 
 /* ------------------------------------------------------------------ */

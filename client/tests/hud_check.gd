@@ -304,6 +304,27 @@ func _check_banner() -> void:
 	_check("an unchanged turn announces nothing", _banner.text == "untouched",
 		"got '%s'" % _banner.text)
 
+	# Hotseat: both seats are this device, so the server hands over a view
+	# whose youSlot has changed. "Your turn" would be addressed to whoever is
+	# about to stop playing, which is why the banner keys off hotseat first.
+	# Verified against the mutation of removing the hotseat branch, which
+	# falls back to "Your turn" - addressed to the player who has just
+	# finished, since in a hotseat view youSlot is always the current slot.
+	var seat_one := Fixtures.match_view()
+	seat_one["hotseat"] = true
+	_controller.load_view(seat_one)
+	await get_tree().process_frame
+
+	var seat_two := Fixtures.match_view()
+	seat_two["hotseat"] = true
+	seat_two["currentSlot"] = 2
+	seat_two["youSlot"] = 2
+	_banner.text = "untouched"
+	_controller.load_view(seat_two)
+	await get_tree().process_frame
+	_check("a hotseat handover says who should be holding the device",
+		_banner.text == "Pass the device - Player 2", "got '%s'" % _banner.text)
+
 	var mine := Fixtures.match_view()
 	mine["roundNumber"] = 5
 	_controller.load_view(mine)

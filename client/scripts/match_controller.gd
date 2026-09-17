@@ -584,7 +584,12 @@ func _announce_turn_change(current: MatchState) -> void:
 	if _turn_banner == null or first or current.phase != "active":
 		return
 
-	if current.is_my_turn():
+	if current.hotseat:
+		# Both seats are this device, so "your turn" is meaningless - the
+		# useful instruction is who should be holding it.
+		_turn_banner.announce("Pass the device - Player %d" % current.current_slot,
+			Color("#ffe08a"))
+	elif current.is_my_turn():
 		_turn_banner.announce("Your turn", Color("#ffe08a"))
 	else:
 		_turn_banner.announce("Opponent's turn", Color("#9aa0ac"))

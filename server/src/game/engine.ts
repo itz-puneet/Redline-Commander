@@ -50,6 +50,8 @@ function fail(reason: string): ActionResult {
 export interface CreateMatchOptions {
   matchId: string;
   mapId: string;
+  /** Pass-and-play on one device; see MatchState.hotseat. */
+  hotseat?: boolean;
   /**
    * Required, not optional. The engine has no business sourcing randomness -
    * it is supposed to be a pure function of its inputs, and a seed it picked
@@ -75,6 +77,7 @@ export function createMatch(options: CreateMatchOptions): MatchState {
     rngCounter: 0,
     winnerSlot: null,
     version: 0,
+    hotseat: options.hotseat === true,
   };
 
   for (const spawn of startUnits) {
@@ -110,13 +113,31 @@ function spawnUnit(
   };
 }
 
+/**
+ * The seat a connection is acting through right now.
+ *
+ * One playerId normally means one seat. In a hotseat match it means every
+ * seat, and the live one is whoever's turn it is - which is what lets a
+ * single connection play both sides without the net layer knowing anything
+ * about pass-and-play beyond calling this instead of `find`.
+ */
+export function seatFor(state: MatchState, playerId: string): Player | undefined {
+  const seats = state.players.filter((p) => p.playerId === playerId);
+  if (seats.length <= 1) return seats[0];
+  return seats.find((p) => p.slot === state.currentSlot) ?? seats[0];
+}
+
 export function addPlayer(
   state: MatchState,
   playerId: string,
   faction: string,
 ): ActionResult {
   if (state.phase !== "lobby") return fail("match_already_started");
-  if (state.players.some((p) => p.playerId === playerId)) return fail("already_joined");
+  // One device, one person, both seats - so the duplicate check that keeps a
+  // networked player from taking both sides is exactly what hotseat lifts.
+  if (!state.hotseat && state.players.some((p) => p.playerId === playerId)) {
+    return fail("already_joined");
+  }
   if (state.players.length >= 2) return fail("match_full");
   if (!FACTIONS[faction]) return fail("unknown_faction");
 

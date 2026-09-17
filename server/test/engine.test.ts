@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { addPlayer, applyAction, createMatch } from "../src/game/engine";
+import { addPlayer, applyAction, createMatch, seatFor } from "../src/game/engine";
 import { reachableTiles, unitAt, validatePath } from "../src/game/movement";
 import { baseDamage, displayHp } from "../src/game/combat";
 import { buildPlayerView, filterEventsFor } from "../src/game/view";
@@ -1502,4 +1502,136 @@ test("Blackout blinds the enemy, not its owner", () => {
     visibleTiles(fired.state, 1).size, minebefore,
     "and the player who fired it sees exactly as much as before",
   );
+});
+
+/* ------------------------------------------------------------------ */
+/* Hotseat                                                             */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Verified against three mutations:
+ *   - addPlayer's hotseat exemption removed: the second seat is refused
+ *   - seatFor returning seats[0]: slot 2 can never take its turn
+ *   - deliveries() ignoring state.hotseat: two views per action, and the
+ *     "one seat at a time" check fails
+ */
+
+function hotseatMatch(): MatchState {
+  const state = createMatch({
+    matchId: "hotseat", mapId: "crossing", rngSeed: 99, hotseat: true,
+  });
+  const first = addPlayer(state, "one-device", "crimson_alliance");
+  assert.ok(first.ok);
+  if (!first.ok) throw new Error("fixture");
+  const second = addPlayer(first.state, "one-device", "azure_federation");
+  assert.ok(second.ok, second.ok === false ? second.reason : "");
+  if (!second.ok) throw new Error("fixture");
+  return second.state;
+}
+
+test("one device can hold both seats, and only in a hotseat match", () => {
+  const shared = hotseatMatch();
+  assert.equal(shared.players.length, 2);
+  assert.equal(shared.players[0].playerId, shared.players[1].playerId);
+  assert.notEqual(shared.players[0].slot, shared.players[1].slot);
+  assert.equal(shared.phase, "active", "a hotseat match starts full");
+
+  // An ordinary match still refuses it - this is the check hotseat lifts,
+  // and lifting it everywhere would let a networked player take both sides.
+  const networked = createMatch({ matchId: "normal", mapId: "crossing", rngSeed: 99 });
+  const once = addPlayer(networked, "same-person", "crimson_alliance");
+  assert.ok(once.ok);
+  if (!once.ok) return;
+  const twice = addPlayer(once.state, "same-person", "azure_federation");
+  assert.equal(twice.ok, false);
+  assert.equal(twice.ok === false && twice.reason, "already_joined");
+});
+
+test("the live seat is whoever's turn it is", () => {
+  const state = hotseatMatch();
+  assert.equal(seatFor(state, "one-device")?.slot, state.currentSlot);
+
+  const passed = applyAction(state, state.currentSlot, { type: "endTurn" });
+  assert.ok(passed.ok);
+  if (!passed.ok) return;
+
+  assert.equal(
+    seatFor(passed.state, "one-device")?.slot, passed.state.currentSlot,
+    "after the handover the same connection acts as the other seat",
+  );
+  assert.notEqual(
+    seatFor(passed.state, "one-device")?.slot, seatFor(state, "one-device")?.slot,
+    "which must actually be a different seat, or nobody ever gets a turn",
+  );
+});
+
+test("a hotseat player still only ever sees one seat's fog at a time", () => {
+  const state = hotseatMatch();
+  const one = buildPlayerView(state, 1);
+  const two = buildPlayerView(state, 2);
+
+  // The two seats are genuinely different pictures of the same board - the
+  // point being that the client is handed one of them, never the union.
+  assert.notDeepEqual(
+    one.visibleTiles, two.visibleTiles,
+    "fixture assumption: the two seats see different ground",
+  );
+  assert.equal(one.players.find((p) => p.slot === 2)?.funds, null,
+    "seat 1's view still hides seat 2's funds, even sharing a device");
+  assert.equal(two.players.find((p) => p.slot === 1)?.funds, null);
+
+  // And every unit in a seat's view is either its own or one it can see.
+  for (const view of [one, two]) {
+    for (const unit of view.units) {
+      if (unit.ownerSlot === view.youSlot) continue;
+      const index = (unit.y ?? 0) * state.map.width + (unit.x ?? 0);
+      assert.ok(
+        view.visibleTiles.includes(index),
+        `seat ${view.youSlot} was sent an enemy unit it cannot see`,
+      );
+    }
+  }
+});
+
+test("a hotseat match delivers one seat's payload, not two to one socket", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const nodePath = await import("node:path");
+  const { FileMatchStore } = await import("../src/match/MatchStore");
+  const { MatchService } = await import("../src/match/MatchService");
+
+  const dir = fs.mkdtempSync(nodePath.join(os.tmpdir(), "redline-hotseat-"));
+  const service = new MatchService(new FileMatchStore(dir));
+
+  const created = await service.create("one-device", "crossing", "crimson_alliance", {
+    hotseat: true, secondFaction: "azure_federation",
+  });
+  assert.ok(created.ok, created.ok === false ? created.reason : "");
+  if (!created.ok) return;
+
+  // Both seats share a playerId, so a payload per seat would be two frames
+  // racing to the same socket with the loser deciding what is on screen.
+  assert.equal(created.deliveries.length, 1, "one payload per connection, not per seat");
+  const opening = created.deliveries[0].view;
+  assert.equal(opening.youSlot, 1);
+
+  // Acting through the one connection, and the handover swapping which seat
+  // the next payload belongs to: this is the whole feature.
+  const passed = await service.act("one-device", created.matchId!, { type: "endTurn" });
+  assert.ok(passed.ok, passed.ok === false ? passed.reason : "");
+  if (!passed.ok) return;
+  assert.equal(passed.deliveries.length, 1);
+  assert.equal(
+    passed.deliveries[0].view.youSlot, 2,
+    "after ending seat 1's turn the device is handed seat 2's own view",
+  );
+  assert.equal(passed.deliveries[0].view.currentSlot, 2);
+
+  // And seat 2 can actually act, which is what seatFor is for.
+  const theirTurn = await service.act("one-device", created.matchId!, { type: "endTurn" });
+  assert.ok(theirTurn.ok, theirTurn.ok === false ? theirTurn.reason : "");
+  if (!theirTurn.ok) return;
+  assert.equal(theirTurn.deliveries[0].view.youSlot, 1, "and the device comes back to seat 1");
+
+  fs.rmSync(dir, { recursive: true, force: true });
 });

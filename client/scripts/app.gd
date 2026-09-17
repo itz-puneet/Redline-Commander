@@ -68,6 +68,7 @@ func show_lobby() -> void:
 		_lobby = LOBBY_SCENE.instantiate()
 		_screens.add_child(_lobby)
 		_lobby.create_requested.connect(_on_create_requested)
+		_lobby.hotseat_requested.connect(_on_hotseat_requested)
 		_lobby.join_requested.connect(_on_join_requested)
 		_lobby.rejoin_requested.connect(_on_rejoin_requested)
 		_lobby.reconnect_requested.connect(_on_reconnect_requested)
@@ -101,6 +102,23 @@ func show_match(view: Dictionary) -> void:
 func _on_create_requested(map_id: String, faction: String) -> void:
 	_lobby.set_busy(true, "Creating match...")
 	Net.create_match(map_id, faction)
+
+
+## Pass-and-play: one device takes both seats. The server does the seating -
+## the client just asks for it - so nothing here becomes authoritative, and
+## the board still only ever receives one seat's fogged view at a time.
+func _on_hotseat_requested(map_id: String, faction: String) -> void:
+	_lobby.set_busy(true, "Starting hotseat match...")
+	Net.create_match(map_id, faction, true, _other_faction(faction))
+
+
+## Someone for the second seat to be, so a hotseat match is not a faction
+## playing itself. Any faction but the one already chosen will do.
+func _other_faction(faction: String) -> String:
+	for id in GameData.factions:
+		if String(id) != faction:
+			return String(id)
+	return faction
 
 
 func _on_join_requested(match_id: String, faction: String) -> void:

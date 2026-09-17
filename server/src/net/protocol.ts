@@ -20,7 +20,12 @@ export type ClientMessage =
    *  connection to use an id registers it; later ones must present the same
    *  secret (see server/src/auth). */
   | { t: "hello"; playerId: string; token: string; clientVersion: string }
-  | { t: "createMatch"; mapId: string; faction: string }
+  /** `hotseat` seats the creator in BOTH slots for pass-and-play on one
+   *  device; `secondFaction` is who they play as in the second seat. */
+  | {
+      t: "createMatch"; mapId: string; faction: string;
+      hotseat?: boolean; secondFaction?: string;
+    }
   | { t: "joinMatch"; matchId: string; faction: string }
   | { t: "rejoinMatch"; matchId: string }
   | { t: "action"; matchId: string; action: Action }

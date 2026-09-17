@@ -19,6 +19,8 @@ var you_slot: int = 0
 var current_slot: int = 0
 var round_number: int = 0
 var winner_slot: int = -1
+## Pass-and-play: this device holds every seat and swaps between them.
+var hotseat: bool = false
 
 var map_id: String = ""
 var map_width: int = 0
@@ -47,6 +49,7 @@ func adopt(view: Dictionary) -> void:
 	current_slot = int(view.get("currentSlot", 0))
 	round_number = int(view.get("roundNumber", 0))
 	winner_slot = -1 if view.get("winnerSlot") == null else int(view.get("winnerSlot"))
+	hotseat = bool(view.get("hotseat", false))
 
 	var map_data: Dictionary = view.get("map", {})
 	map_id = String(map_data.get("id", ""))

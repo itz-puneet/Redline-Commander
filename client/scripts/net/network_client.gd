@@ -231,8 +231,15 @@ func _handle_packet(raw: String) -> void:
 
 ## --- outbound ----------------------------------------------------------
 
-func create_match(map_id: String, faction: String) -> void:
-	_send({"t": "createMatch", "mapId": map_id, "faction": faction})
+## `hotseat` asks the server to seat this device in BOTH slots for
+## pass-and-play; `second_faction` is who it plays as in the other seat.
+func create_match(map_id: String, faction: String, hotseat: bool = false,
+		second_faction: String = "") -> void:
+	var message := {"t": "createMatch", "mapId": map_id, "faction": faction}
+	if hotseat:
+		message["hotseat"] = true
+		message["secondFaction"] = second_faction if not second_faction.is_empty() else faction
+	_send(message)
 
 
 func join_match(match_id: String, faction: String) -> void:

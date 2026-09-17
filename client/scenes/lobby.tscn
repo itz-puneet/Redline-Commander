@@ -100,6 +100,10 @@ placeholder_text = "Match code"
 custom_minimum_size = Vector2(140, 48)
 text = "Join match"
 
+[node name="Hotseat" type="Button" parent="Center/Panel/Margin/Column"]
+custom_minimum_size = Vector2(0, 48)
+text = "Hotseat on this device"
+
 [node name="Rejoin" type="Button" parent="Center/Panel/Margin/Column"]
 custom_minimum_size = Vector2(0, 48)
 text = "Rejoin match"

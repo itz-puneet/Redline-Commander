@@ -48,7 +48,11 @@ finished models, terrain art, more maps, and a campaign.
 - [x] Build menu when tapping an owned factory/airport/port
 - [x] Lobby screen: connect, create match, share code, join by code, rejoin
 - [x] End-to-end check against a real server (`tools/live-check.sh`)
-- [ ] Hotseat mode on one device (useful for testing without two phones)
+- [x] Hotseat mode on one device. The server seats one `playerId` in both
+      slots and serves whichever seat is to move, so there is no second
+      connection, no second identity, and no combined view: the device still
+      only ever receives one seat's fogged payload at a time, and the banner
+      says who should be holding it.
 - [x] Transport load/unload actions. Cargo is off the board: it keeps its
       transport's coordinates so a sinking has somewhere to report the hold
       dying, but occupies no tile, sees nothing, and is never sent to an

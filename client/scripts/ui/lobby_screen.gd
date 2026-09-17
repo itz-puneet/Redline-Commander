@@ -10,6 +10,8 @@ extends Control
 signal create_requested(map_id: String, faction: String)
 signal join_requested(match_id: String, faction: String)
 signal rejoin_requested(match_id: String)
+## Both seats on this device, for playing without a second phone.
+signal hotseat_requested(map_id: String, faction: String)
 signal reconnect_requested(server_url: String)
 ## Abandon this device's identity and start again as a new player.
 signal reset_identity_requested()
@@ -23,6 +25,7 @@ signal reset_identity_requested()
 @onready var _join_code: LineEdit = $Center/Panel/Margin/Column/JoinRow/Code
 @onready var _join: Button = $Center/Panel/Margin/Column/JoinRow/Join
 @onready var _rejoin: Button = $Center/Panel/Margin/Column/Rejoin
+@onready var _hotseat: Button = $Center/Panel/Margin/Column/Hotseat
 @onready var _message: Label = $Center/Panel/Margin/Column/Message
 @onready var _reset_identity: Button = $Center/Panel/Margin/Column/ResetIdentity
 
@@ -38,6 +41,7 @@ func _ready() -> void:
 	_create.pressed.connect(_on_create_pressed)
 	_join.pressed.connect(_on_join_pressed)
 	_rejoin.pressed.connect(_on_rejoin_pressed)
+	_hotseat.pressed.connect(_on_hotseat_pressed)
 	_reset_identity.pressed.connect(func():
 		offer_identity_reset(false)
 		reset_identity_requested.emit())
@@ -128,6 +132,12 @@ func _on_create_pressed() -> void:
 	create_requested.emit(selected_map(), selected_faction())
 
 
+func _on_hotseat_pressed() -> void:
+	if not _can_act():
+		return
+	hotseat_requested.emit(selected_map(), selected_faction())
+
+
 func _on_join_pressed() -> void:
 	if not _can_act():
 		return
@@ -158,6 +168,7 @@ func _refresh() -> void:
 	_create.disabled = not ready
 	_join.disabled = not ready
 	_rejoin.disabled = not ready
+	_hotseat.disabled = not ready
 	# Only offer a rejoin when there is actually a match to go back to.
 	_rejoin.visible = Session.has_match()
 	if _rejoin.visible:

@@ -46,6 +46,12 @@ export interface PlayerView {
   /** Own units in full; enemy units only where visible, and without hidden fields. */
   units: Partial<Unit>[];
   visibleTiles: number[];
+  /**
+   * Pass-and-play on one device. The client needs this to tell the player to
+   * hand the phone over rather than announcing "your turn" to someone who is
+   * about to become the opponent.
+   */
+  hotseat: boolean;
 }
 
 /** Enemy units are reported without fuel/ammo/cargo - that is not observable. */
@@ -113,6 +119,7 @@ export function buildPlayerView(state: MatchState, slot: number): PlayerView {
     })),
     units,
     visibleTiles: [...visible].sort((a, b) => a - b),
+    hotseat: state.hotseat === true,
   };
 }
 

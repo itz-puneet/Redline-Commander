@@ -10,7 +10,7 @@
  */
 
 import { randomBytes, randomInt } from "crypto";
-import { addPlayer, applyAction, createMatch } from "../game/engine";
+import { addPlayer, applyAction, createMatch, seatFor } from "../game/engine";
 import { buildPlayerView, filterEventsFor, type PlayerView } from "../game/view";
 import type { Action, GameEvent, MatchState } from "../game/types";
 import type { MatchStore } from "./MatchStore";
@@ -104,31 +104,59 @@ export class MatchService {
 
   /** Fan the same authoritative state out as one fog-filtered payload each. */
   private deliveries(state: MatchState, events: GameEvent[]): Delivery[] {
-    return state.players.map((player) => ({
+    // In a hotseat match every seat belongs to the same connection, so one
+    // payload per seat would mean two frames racing to one socket and the
+    // loser deciding what the player sees. Send the seat that is to move,
+    // and only that one - which is also what keeps the screen showing a
+    // single side's fog rather than both stacked on top of each other.
+    const seats = state.hotseat
+      ? [seatFor(state, state.players[0]?.playerId ?? "") ?? state.players[0]].filter(Boolean)
+      : state.players;
+
+    return seats.map((player) => ({
       playerId: player.playerId,
       events: filterEventsFor(state, player.slot, events),
       view: buildPlayerView(state, player.slot),
     }));
   }
 
-  async create(playerId: string, mapId: string, faction: string): Promise<CommandResult> {
+  async create(
+    playerId: string,
+    mapId: string,
+    faction: string,
+    options: { hotseat?: boolean; secondFaction?: string } = {},
+  ): Promise<CommandResult> {
     let state: MatchState;
     try {
       // The seed comes from here rather than the engine, so the engine stays
       // a pure function of its inputs and the seed is not guessable.
-      state = createMatch({ matchId: newId(), mapId, rngSeed: randomInt(0, 0x7fffffff) });
+      state = createMatch({
+        matchId: newId(),
+        mapId,
+        rngSeed: randomInt(0, 0x7fffffff),
+        hotseat: options.hotseat === true,
+      });
     } catch (err) {
       return { ok: false, reason: `bad_map: ${(err as Error).message}`, deliveries: [] };
     }
 
     const joined = addPlayer(state, playerId, faction);
     if (!joined.ok) return { ok: false, reason: joined.reason, deliveries: [] };
+    let seated = joined.state;
 
-    await this.commit(joined.state);
+    // A hotseat match starts full: there is nobody else coming, so waiting
+    // for a second connection would leave it stuck in the lobby forever.
+    if (options.hotseat === true) {
+      const second = addPlayer(seated, playerId, options.secondFaction ?? faction);
+      if (!second.ok) return { ok: false, reason: second.reason, deliveries: [] };
+      seated = second.state;
+    }
+
+    await this.commit(seated);
     return {
       ok: true,
-      matchId: joined.state.matchId,
-      deliveries: this.deliveries(joined.state, joined.events),
+      matchId: seated.matchId,
+      deliveries: this.deliveries(seated, joined.events),
     };
   }
 
@@ -163,7 +191,7 @@ export class MatchService {
     const state = await this.get(matchId);
     if (!state) return { ok: false, reason: "no_such_match", deliveries: [] };
 
-    const player = state.players.find((p) => p.playerId === playerId);
+    const player = seatFor(state, playerId);
     if (!player) return { ok: false, reason: "not_in_this_match", deliveries: [] };
 
     player.connected = true;
@@ -181,7 +209,7 @@ export class MatchService {
   ): Promise<PresenceChange | null> {
     return this.exclusive(matchId, async () => {
       const state = await this.get(matchId);
-      const player = state?.players.find((p) => p.playerId === playerId);
+      const player = state ? seatFor(state, playerId) : undefined;
       if (!state || !player) return null;
       if (player.connected === connected) return null;
 
@@ -212,7 +240,7 @@ export class MatchService {
     const state = await this.get(matchId);
     if (!state) return { ok: false, reason: "no_such_match", deliveries: [] };
 
-    const player = state.players.find((p) => p.playerId === playerId);
+    const player = seatFor(state, playerId);
     if (!player) return { ok: false, reason: "not_in_this_match", deliveries: [] };
 
     const result = applyAction(state, player.slot, action);

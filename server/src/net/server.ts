@@ -274,7 +274,10 @@ export function attachGameServer(
             if (!limiter.allowMatchCreation(session.playerId!, Date.now())) {
               return send(socket, { t: "error", code: "rate_limited" });
             }
-            const result = await matches.create(session.playerId!, message.mapId, message.faction);
+            const result = await matches.create(
+              session.playerId!, message.mapId, message.faction,
+              { hotseat: message.hotseat === true, secondFaction: message.secondFaction },
+            );
             if (!result.ok) return send(socket, { t: "error", code: result.reason! });
             session.matchId = result.matchId!;
             send(socket, { t: "matchCreated", matchId: result.matchId!, joinCode: result.matchId! });
