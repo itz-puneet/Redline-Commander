@@ -123,7 +123,12 @@ Sizes, formats and the checks that reject bad art are in `docs/ART_SPEC.md`.
       shallows, and a causeway at each edge so foot units can still cross.
       Every map in the index is checked for playability by
       `server/test/data.test.ts`.
-- [ ] 3–5 multiplayer maps. Two so far (`crossing`, `straits`).
+- [x] 3-5 multiplayer maps. Five: `crossing` (15x10), `straits` (18x12),
+      `ridge` (11x11), `pass` (12x17) and `reach` (24x16) - deliberately one
+      of each shape, since the per-map checks only test size independence
+      while the index actually holds varied sizes. `data.test.ts` walks
+      every tile of every map through `tileAt`, and `board_check` renders
+      each one and round-trips its far corner.
 - [ ] Campaign missions 1–3
 
 ## Phase 5 — Polish and ship

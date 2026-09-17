@@ -10,6 +10,11 @@ extends Node
 const BOARD_SCENE := preload("res://scenes/board.tscn")
 
 var _failures := 0
+## Every phase that ran to completion. A GDScript runtime error aborts the
+## function it happens in and execution simply continues, so without this a
+## suite prints "all checks passed" for checks that never ran - which is how
+## a typo in a GameData call once hid this whole map-size phase.
+var _phases: Array[String] = []
 var _board: Board = null
 
 
@@ -27,11 +32,30 @@ func _ready() -> void:
 	_check_reconciliation(state)
 	_check_hud_inset(state)
 	_check_coordinates()
+	_check_every_map_size_renders()
 	_check_every_seat_has_tiles(state)
 	_check_real_terrain_art()
 	_check_neighbour_masks()
 	_check_variant_preference()
 	_check_water_map_renders(state)
+
+	for phase in [
+		"_check_terrain",
+		"_check_units",
+		"_check_fog",
+		"_check_overlays",
+		"_check_reconciliation",
+		"_check_hud_inset",
+		"_check_coordinates",
+		"_check_every_map_size_renders",
+		"_check_every_seat_has_tiles",
+		"_check_real_terrain_art",
+		"_check_neighbour_masks",
+		"_check_variant_preference",
+		"_check_water_map_renders",
+	]:
+		_check("phase %s ran to completion" % phase, _phases.has(phase),
+			"it aborted part-way, so the checks after that point never ran")
 
 	if _failures == 0:
 		print("\nboard_check: all checks passed")
@@ -64,6 +88,7 @@ func _check_terrain(state: MatchState) -> void:
 	var plain_a := TerrainTileSet.tile_key("plains", 0)
 	var plain_b := TerrainTileSet.tile_key("plains", 2)
 	_check("un-ownable terrain has one variant", plain_a == plain_b)
+	_phases.append("_check_terrain")
 
 
 func _check_units(state: MatchState) -> void:
@@ -86,6 +111,7 @@ func _check_units(state: MatchState) -> void:
 
 	var spent := _board.unit_node("a3")
 	_check("a spent unit is marked", spent != null and spent.has_acted)
+	_phases.append("_check_units")
 
 
 func _check_fog(state: MatchState) -> void:
@@ -101,6 +127,7 @@ func _check_fog(state: MatchState) -> void:
 	# entirely, so there is nothing for the fog layer to have to hide.
 	_check("an unseen enemy is absent from the payload", not state.units.has("b2"))
 	_check("a seen enemy is present", state.units.has("b1"))
+	_phases.append("_check_fog")
 
 
 func _check_overlays(state: MatchState) -> void:
@@ -140,6 +167,7 @@ func _check_overlays(state: MatchState) -> void:
 		"%d illegal tiles" % illegal)
 	_check("the central bridge is reachable", reachable.has(Vector2i(7, 5)),
 		"armour must have a middle crossing")
+	_phases.append("_check_overlays")
 
 
 func _check_reconciliation(state: MatchState) -> void:
@@ -168,6 +196,9 @@ func _check_reconciliation(state: MatchState) -> void:
 
 ## The camera must keep the board clear of the HUD, or the bottom row of
 ## the map is unreachable by touch.
+	_phases.append("_check_reconciliation")
+
+
 func _check_hud_inset(state: MatchState) -> void:
 	var camera := _board.camera
 	camera.bottom_inset = 0.0
@@ -184,6 +215,7 @@ func _check_hud_inset(state: MatchState) -> void:
 		"%f -> %f" % [full_zoom, camera.zoom.x])
 
 	camera.bottom_inset = 0.0
+	_phases.append("_check_hud_inset")
 
 
 func _check_coordinates() -> void:
@@ -211,6 +243,9 @@ func _check_coordinates() -> void:
 ##     not the draw check, because the fallback added to _render_terrain
 ##     now draws the tile unowned instead of skipping it
 ##   - removing that fallback fails the draw check
+	_phases.append("_check_coordinates")
+
+
 func _check_every_seat_has_tiles(state: MatchState) -> void:
 	var built: Dictionary = TerrainTileSet.build()
 	var coords: Dictionary = built.get("coords", {})
@@ -260,6 +295,9 @@ func _check_every_seat_has_tiles(state: MatchState) -> void:
 ## mismatch a stale or half-regenerated sheet would trigger, so this proves
 ## the fallback path is reachable rather than assuming it from reading the
 ## code.
+	_phases.append("_check_every_seat_has_tiles")
+
+
 func _check_real_terrain_art() -> void:
 	_check("the committed terrain sheet is used, not the flat-colour fallback",
 		TerrainTileSet.using_real_art(BoardTheme.TILE_SIZE))
@@ -280,6 +318,9 @@ func _check_real_terrain_art() -> void:
 ##   - shallow_water's off-map rule flipped to count as land: the open-sea
 ##     check fails while the land checks stay green
 ##   - MASK_LETTERS reordered to N, S, E, W: the suffix checks fail
+	_phases.append("_check_real_terrain_art")
+
+
 func _check_neighbour_masks() -> void:
 	_check("road and shore autotile, open water does not",
 		TerrainTileSet.autotiles("road") and TerrainTileSet.autotiles("shallow_water")
@@ -323,6 +364,9 @@ func _check_neighbour_masks() -> void:
 ## The lookup order. The specific key has to be tried first or the sheet
 ## could carry every shoreline in the world and none would ever be drawn,
 ## and the plain key has to be last or a tile with no variant is a hole.
+	_phases.append("_check_neighbour_masks")
+
+
 func _check_variant_preference() -> void:
 	var keys := TerrainTileSet.variant_keys("road", 0, 5)
 	_check("the neighbour-aware key is preferred", keys.size() == 2 and keys[0] == "road:0@NS",
@@ -354,6 +398,9 @@ func _check_variant_preference() -> void:
 ## nothing: the loop above it already returns the plain key, so that line is
 ## reached only when the sheet has neither candidate. It is a guard, not a
 ## behaviour, and no check here claims otherwise.
+	_phases.append("_check_variant_preference")
+
+
 func _check_water_map_renders(state: MatchState) -> void:
 	var view := Fixtures.match_view(true, "straits")
 	view["units"] = []
@@ -421,3 +468,62 @@ func _check_water_map_renders(state: MatchState) -> void:
 		orientations.size() >= 4, "%d distinct: %s" % [orientations.size(), str(orientations.keys())])
 
 	_board.render(state)
+
+
+## The renderer must not assume a map's shape.
+##
+## board_check otherwise works entirely on `crossing` (15x10) and `straits`
+## (18x12) - both landscape, both similar. The index now also carries a
+## square, a portrait and a much larger map, and the whole point of them is
+## that nothing here notices the difference. Driven off GameData.map_list()
+## rather than a list written here, so a map added later is covered without
+## anyone remembering to come back.
+##
+## Verified against the mutation of hardcoding `state.map_width` to 15 in
+## Board._render_terrain's loop: every map that is not 15 wide then draws
+## the wrong number of tiles and this goes red.
+	_phases.append("_check_water_map_renders")
+
+
+func _check_every_map_size_renders() -> void:
+	var shapes: Array[String] = []
+	for entry in GameData.map_list():
+		var map_id := String(entry.get("id", ""))
+		var view := Fixtures.match_view(true, map_id)
+		view["units"] = []
+		var state := MatchState.from_view(view)
+		_board.render(state)
+
+		var expected := state.map_width * state.map_height
+		var layer: TileMapLayer = _board.terrain_layer
+		_check("%s (%dx%d) draws every one of its tiles"
+				% [map_id, state.map_width, state.map_height],
+			layer.get_used_cells().size() == expected,
+			"%d of %d" % [layer.get_used_cells().size(), expected])
+
+		# The far corner is where an off-by-one in either dimension shows up,
+		# and a square map would hide a width/height transposition entirely -
+		# so both are checked on every shape the index offers.
+		var last := Vector2i(state.map_width - 1, state.map_height - 1)
+		_check("%s round-trips its far corner" % map_id,
+			_board.tile_at_world(_board.world_at_tile(last) + Vector2(1, 1)) == last,
+			"got %s" % _board.tile_at_world(_board.world_at_tile(last) + Vector2(1, 1)))
+		_check("%s has no tile drawn past its edge" % map_id,
+			not layer.get_used_cells().has(Vector2i(state.map_width, state.map_height)))
+
+		shapes.append("%dx%d" % [state.map_width, state.map_height])
+
+	# Guards the guard: if every shipped map were the same shape the checks
+	# above would pass while proving nothing about size independence.
+	_check("the index offers more than one shape to test",
+		shapes.size() >= 3 and shapes.size() == _unique(shapes).size(),
+		"shapes: %s" % ", ".join(shapes))
+	_phases.append("_check_every_map_size_renders")
+
+
+func _unique(values: Array[String]) -> Array[String]:
+	var seen: Array[String] = []
+	for value in values:
+		if not seen.has(value):
+			seen.append(value)
+	return seen

@@ -20,7 +20,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { DAMAGE_MATRIX, MAP_INDEX, TERRAIN, UNITS, loadMap } from "../src/game/data";
+import { DAMAGE_MATRIX, MAP_INDEX, TERRAIN, UNITS, loadMap, tileAt } from "../src/game/data";
+import { addPlayer, applyAction, createMatch } from "../src/game/engine";
+import { reachableTiles } from "../src/game/movement";
+import { buildPlayerView } from "../src/game/view";
 
 const unitTypes = Object.keys(UNITS);
 const attackers = unitTypes.filter((type) => UNITS[type].fire_mode !== null);
@@ -124,11 +127,18 @@ test("indirect units cannot fire at range 1, direct units can", () => {
  * terrain glyph. What it cannot tell is whether the map is *playable* - and
  * a map that loads cleanly but cannot be won is a much quieter failure.
  *
- * The naval map was written with the two coasts unconnected on foot. Since
- * transport load/unload is not implemented, no unit could ever have reached
- * the enemy HQ, so the only way to win would have been to destroy every
- * enemy unit. Nothing would have reported that; the map would simply have
- * played wrong.
+ * The naval map was written with the two coasts unconnected on foot, back
+ * when transports could not carry anything - so no unit could ever have
+ * reached the enemy HQ and the only way to win was to destroy every enemy
+ * unit. Nothing would have reported that; the map would simply have played
+ * wrong.
+ *
+ * Transports now load and unload, so a map COULD in principle be won across
+ * water alone. The foot-connectivity check stays anyway, and deliberately:
+ * a capture route that needs no naval build order is what makes a map
+ * winnable for a player who never buys a ship, and every shipped map is
+ * authored to that promise. A map that means to break it is a design
+ * decision that should have to change this test on purpose.
  */
 for (const entry of MAP_INDEX) {
   const { map, startUnits } = loadMap(entry.id);
@@ -175,8 +185,8 @@ for (const entry of MAP_INDEX) {
     assert.deepEqual(
       unreachable,
       [],
-      "an HQ no foot unit can walk to cannot be captured, and until transport " +
-        "load/unload exists that makes the map unwinnable by capture",
+      "an HQ no foot unit can walk to can only be captured by shipping infantry " +
+        "across, so the map stops being winnable for a player who builds no navy",
     );
   });
 
@@ -349,5 +359,112 @@ for (const entry of MAP_INDEX) {
       }
     }
     assert.deepEqual(floating, [], `road tiles with nothing to connect to: ${floating.join(" ")}`);
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Map size independence                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Nothing in the engine may assume a map's dimensions.
+ *
+ * Every per-map check above already runs against whatever is in the index,
+ * which is exactly the point - but that only tests varied shapes while the
+ * index actually holds varied shapes. Five copies of one 15x10 map would
+ * keep all of them green while testing size-independence not at all, so the
+ * first check here guards the guard, and the second plays a real turn on
+ * every map so the property is proven end to end rather than at parse time.
+ *
+ * Verified by mutation, two ways:
+ *   - pinning `width` to 15 in loadMap's returned map: the per-map loop runs
+ *     at module load, so this fails the whole file at once rather than a
+ *     named check. Coarse, but it does not pass.
+ *   - pinning tileAt's height bound to 12: caught ONLY by the every-tile
+ *     walk below. The play-a-turn check misses it completely, because the
+ *     start units sit near the top of the map and the movement search never
+ *     reaches the rows a tall map adds. That is the whole reason the walk
+ *     exists - a bounds bug lives at the edges, so a test has to go there.
+ */
+
+test("the shipped maps are genuinely different shapes", () => {
+  const sizes = MAP_INDEX.map((e) => e.size);
+  assert.ok(MAP_INDEX.length >= 3, `only ${MAP_INDEX.length} maps in the index`);
+  assert.equal(new Set(sizes).size, sizes.length, `duplicate sizes: ${sizes.join(" ")}`);
+
+  const dims = MAP_INDEX.map((e) => loadMap(e.id).map);
+  assert.ok(new Set(dims.map((m) => m.width)).size > 1, "every map is the same width");
+  assert.ok(new Set(dims.map((m) => m.height)).size > 1, "every map is the same height");
+
+  // Orientation is the assumption most likely to be baked in somewhere, so
+  // the set has to contain a counter-example to each shape.
+  assert.ok(dims.some((m) => m.width > m.height), "no landscape map");
+  assert.ok(dims.some((m) => m.height > m.width), "no portrait map");
+  assert.ok(dims.some((m) => m.width === m.height), "no square map");
+});
+
+for (const entry of MAP_INDEX) {
+  test(`${entry.id}: every tile of a ${entry.size} map is addressable`, () => {
+    const { map } = loadMap(entry.id);
+
+    // Walk the whole grid through the public accessor rather than indexing
+    // the array directly: tileAt is what every rule in the engine uses to
+    // ask what is underfoot, and a bound that does not track the map's own
+    // height turns the far rows into "off the map" without any other symptom.
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        assert.ok(tileAt(map, x, y), `tileAt says ${x},${y} is off a ${entry.size} map`);
+      }
+    }
+
+    // And the edges are edges: one step past each side is nothing at all.
+    assert.equal(tileAt(map, -1, 0), undefined);
+    assert.equal(tileAt(map, 0, -1), undefined);
+    assert.equal(tileAt(map, map.width, 0), undefined, "a column past the right edge exists");
+    assert.equal(tileAt(map, 0, map.height), undefined, "a row past the bottom edge exists");
+  });
+
+  test(`${entry.id}: a real turn can be played on it at ${entry.size}`, () => {
+    let state = createMatch({ matchId: `size-${entry.id}`, mapId: entry.id, rngSeed: 4 });
+    const p1 = addPlayer(state, "player-one", "crimson_alliance");
+    assert.ok(p1.ok);
+    if (!p1.ok) return;
+    const p2 = addPlayer(p1.state, "player-two", "azure_federation");
+    assert.ok(p2.ok, p2.ok === false ? p2.reason : "");
+    if (!p2.ok) return;
+    const started = p2.state;
+
+    // The view is built per player from the map's own dimensions; a hardcoded
+    // width here would index into the wrong row and quietly mis-place units.
+    const view = buildPlayerView(started, 1);
+    assert.equal(view.map.terrain.length, started.map.width * started.map.height);
+    assert.equal(view.map.tileOwners.length, view.map.terrain.length);
+    for (const index of view.visibleTiles) {
+      assert.ok(index >= 0 && index < view.map.terrain.length, `visible tile ${index} off-map`);
+    }
+    for (const unit of view.units) {
+      assert.ok((unit.x ?? -1) >= 0 && (unit.x ?? 0) < started.map.width, "unit off-map in x");
+      assert.ok((unit.y ?? -1) >= 0 && (unit.y ?? 0) < started.map.height, "unit off-map in y");
+    }
+
+    // And a unit can actually be ordered somewhere, which exercises the
+    // movement search over this map's real bounds.
+    const mine = Object.values(started.units).filter((u) => u.ownerSlot === 1);
+    assert.ok(mine.length > 0, "slot 1 has no start units");
+    const mover = mine.find((u) => reachableTiles(started, u).length > 1);
+    assert.ok(mover, "no start unit can move anywhere");
+    if (!mover) return;
+
+    const step = reachableTiles(started, mover).find(
+      (t) => (t.x !== mover.x || t.y !== mover.y) && t.cost > 0,
+    )!;
+    const moved = applyAction(started, 1, {
+      type: "move", unitId: mover.id, path: [{ x: step.x, y: step.y }],
+    });
+    assert.ok(moved.ok, moved.ok === false ? moved.reason : "");
+    if (!moved.ok) return;
+
+    const ended = applyAction(moved.state, 1, { type: "endTurn" });
+    assert.ok(ended.ok, ended.ok === false ? ended.reason : "");
   });
 }

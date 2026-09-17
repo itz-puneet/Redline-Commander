@@ -1,0 +1,99 @@
+{
+  "id": "pass",
+  "display_name": "Cinderfall Pass",
+  "max_players": 2,
+  "width": 12,
+  "height": 17,
+  "_legend": {
+    "p": "plains",
+    "r": "road",
+    "f": "forest",
+    "m": "mountain",
+    "v": "river",
+    "s": "shallow_water",
+    "d": "deep_water",
+    "e": "reef",
+    "C": "city",
+    "F": "factory",
+    "A": "airport",
+    "P": "port",
+    "H": "hq"
+  },
+  "tiles": [
+    "HCppppppppfm",
+    "CFrppppppppf",
+    "prrppppCpppp",
+    "pprpppppppmp",
+    "pprppfppppmp",
+    "Aprpffpppppp",
+    "pprpppppppCp",
+    "pprppppppppp",
+    "vvrvvvvvvrvv",
+    "ppppppppprpp",
+    "pCppppppprpp",
+    "ppppppffprpA",
+    "pmppppfpprpp",
+    "pmppppppprpp",
+    "ppppCpppprrp",
+    "fpppppppprFC",
+    "mfppppppppCH"
+  ],
+  "_tile_owners_comment": "Ownership is by index: 0 = neutral, 1 = player slot 1, 2 = player slot 2. Only capturable tiles may be non-zero.",
+  "tile_owners": [
+    "110000000000",
+    "110000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "100000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000002",
+    "000000000000",
+    "000000000000",
+    "000000000000",
+    "000000000022",
+    "000000000022"
+  ],
+  "start_units": [
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 3,
+      "y": 1
+    },
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "slot": 1,
+      "unit_type": "light_tank",
+      "x": 3,
+      "y": 2
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 8,
+      "y": 15
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 9,
+      "y": 14
+    },
+    {
+      "slot": 2,
+      "unit_type": "light_tank",
+      "x": 8,
+      "y": 14
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "id": "ridge",
+  "display_name": "Ironworks Ridge",
+  "max_players": 2,
+  "width": 11,
+  "height": 11,
+  "_legend": {
+    "p": "plains",
+    "r": "road",
+    "f": "forest",
+    "m": "mountain",
+    "v": "river",
+    "s": "shallow_water",
+    "d": "deep_water",
+    "e": "reef",
+    "C": "city",
+    "F": "factory",
+    "A": "airport",
+    "P": "port",
+    "H": "hq"
+  },
+  "tiles": [
+    "HCppfmppppp",
+    "CFrppfppppp",
+    "prrpppppCpp",
+    "pprpmmppppp",
+    "fprpmpppfpp",
+    "mprrrArrrpm",
+    "ppfpppmprpf",
+    "pppppmmprpp",
+    "ppCppppprrp",
+    "pppppfpprFC",
+    "pppppmfppCH"
+  ],
+  "_tile_owners_comment": "Ownership is by index: 0 = neutral, 1 = player slot 1, 2 = player slot 2. Only capturable tiles may be non-zero.",
+  "tile_owners": [
+    "11000000000",
+    "11000000000",
+    "00000000000",
+    "00000000000",
+    "00000000000",
+    "00000000000",
+    "00000000000",
+    "00000000000",
+    "00000000000",
+    "00000000022",
+    "00000000022"
+  ],
+  "start_units": [
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 3,
+      "y": 1
+    },
+    {
+      "slot": 1,
+      "unit_type": "infantry",
+      "x": 2,
+      "y": 2
+    },
+    {
+      "slot": 1,
+      "unit_type": "light_tank",
+      "x": 3,
+      "y": 2
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 7,
+      "y": 9
+    },
+    {
+      "slot": 2,
+      "unit_type": "infantry",
+      "x": 8,
+      "y": 8
+    },
+    {
+      "slot": 2,
+      "unit_type": "light_tank",
+      "x": 7,
+      "y": 8
+    }
+  ]
+}

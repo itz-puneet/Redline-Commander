@@ -14,6 +14,27 @@
       "max_players": 2,
       "size": "18x12",
       "summary": "Naval map. A deep channel with reefs and shallows divides two coasts, joined by a causeway at each edge."
+    },
+    {
+      "id": "ridge",
+      "display_name": "Ironworks Ridge",
+      "max_players": 2,
+      "size": "11x11",
+      "summary": "Compact square duel. A mountain spine splits the field and a neutral airport sits dead centre."
+    },
+    {
+      "id": "pass",
+      "display_name": "Cinderfall Pass",
+      "max_players": 2,
+      "size": "12x17",
+      "summary": "Tall north-south map. A river divides it with only two bridges, so vehicles must commit to a side."
+    },
+    {
+      "id": "reach",
+      "display_name": "Tidewater Reach",
+      "max_players": 2,
+      "size": "24x16",
+      "summary": "Large naval map. A reef-strewn channel separates the coasts, with a causeway at each edge and a transport apiece."
     }
   ]
 }
