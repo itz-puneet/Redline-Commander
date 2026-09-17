@@ -191,6 +191,8 @@ messages, connections and match creation are rate limited.
    `docs/ART_BRIEF.md` — what to actually draw, for whoever draws it.
    `docs/AUDIO_SPEC.md` — the same for sound: every effect, how long the
    animator gives it, and what to actually record.
+   `docs/ASSET_PROMPTS.md` — paste-ready generator prompts for everything
+   still missing, with the palette and the checks that reject a bad one.
 5. `docs/DEPLOYMENT.md` — TLS, environment variables, running it for real.
 6. `docs/ROADMAP.md` — pick up the next unchecked item.
 
@@ -236,6 +238,12 @@ tools/dev-cert.sh           # a self-signed cert for local wss:// testing
 # the faction colour. The sheet is committed, so this is only for changing
 # it. See art/png/README.md.
 art/png/build_sheet.py <output dir> --diff-suffix red
+
+# Check a generated tile before it goes in: size, opacity, and whether it
+# actually wraps. --write downscales it to 48x48 and drops it in place.
+# See docs/ASSET_PROMPTS.md for the prompts that produce these.
+art/png/check_tile.py <image.png> ...
+art/png/check_tile.py --write art/png/terrain <image.png> ...
 
 # Terrain art - one PNG per tile in art/png/terrain/ (owner variants for
 # capturable terrain: city_0.png .. city_4.png). No mask, no overhang - a
